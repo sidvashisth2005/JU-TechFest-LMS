@@ -18,6 +18,7 @@ interface RoverStatus {
   camera: string;
   detector: string;
   targets: number;
+  seen?: Record<string, number>;
   fps: number | null;
   mock: boolean;
   stop_cm?: number;
@@ -275,8 +276,16 @@ export default function Rover() {
               </dd>
               <dt className="text-gray-500">Motors L / R</dt>
               <dd className="tabular-nums">{status ? `${status.left_dps.toFixed(0)} / ${status.right_dps.toFixed(0)} °/s` : "—"}</dd>
-              <dt className="text-gray-500">Cows in view</dt>
-              <dd className="tabular-nums">{status?.targets ?? "—"}</dd>
+              <dt className="text-gray-500">In view</dt>
+              <dd className="tabular-nums">
+                {status?.seen && Object.keys(status.seen).length
+                  ? Object.entries(status.seen)
+                      .map(([label, n]) => `${n} ${label}`)
+                      .join(", ")
+                  : status
+                    ? "nothing"
+                    : "—"}
+              </dd>
             </dl>
           </Card>
         </div>

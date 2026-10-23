@@ -185,6 +185,7 @@ class Rover:
             "camera": self.camera.name,
             "detector": self.detector.name,
             "targets": sum(1 for d in self.dets if d.label != "person"),
+            "seen": {label: sum(1 for d in self.dets if d.label == label) for label in {d.label for d in self.dets}},
             "fps": round(self.camera.fps, 1),
             "loop_hz": round(self.loop_fps, 1),
             "vision_fps": round(self.vision_fps, 1),

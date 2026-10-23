@@ -3,6 +3,7 @@
     make_detector("green")                       legacy green-marker tracking (HSV 35-90)
     make_detector("yolo:ml/detection/models/coco_yolo11n.onnx")  YOLO ONNX via OpenCV DNN
     make_detector("ncnn:ml/detection/models/cow_ncnn_model")      YOLO NCNN (faster on the Pi)
+    make_detector("ncnn:ml/detection/models/coco_yolo11n_416_ncnn_model@416")   "@SIZE" = export size
 
 Detections get a track id from a small IoU tracker so the follow controller can stick to
 the same animal between frames.
@@ -15,7 +16,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-COCO_NAMES = {0: "person", 18: "sheep", 19: "cow"}  # the COCO classes the rover cares about
+# the COCO classes the rover cares about: people (safety), farm animals and pets/birds around them
+COCO_NAMES = {0: "person", 14: "bird", 15: "cat", 16: "dog", 17: "horse", 18: "sheep", 19: "cow"}
 
 
 @dataclass
@@ -206,12 +208,16 @@ class IouTracker:
 
 
 def make_detector(spec: str):
+    """`green`, `yolo:PATH.onnx[@SIZE]` or `ncnn:FOLDER[@SIZE]`; SIZE = the export's input size (320)."""
     if spec == "green":
         return GreenDetector()
-    if spec.startswith("yolo:"):
-        return YoloOnnxDetector(spec[len("yolo:") :])
-    if spec.startswith("ncnn:"):
-        return YoloNcnnDetector(spec[len("ncnn:") :])
+    kind, _, rest = spec.partition(":")
+    path, _, size = rest.partition("@")
+    imgsz = int(size) if size else 320
+    if kind == "yolo":
+        return YoloOnnxDetector(path, imgsz=imgsz)
+    if kind == "ncnn":
+        return YoloNcnnDetector(path, imgsz=imgsz)
     raise ValueError(f"unknown detector {spec!r}")
 
 

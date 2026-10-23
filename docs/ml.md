@@ -114,3 +114,19 @@ bash ml/detection/run_cow_person_pipeline.sh data    # already run: dataset + ps
 bash ml/detection/run_cow_person_pipeline.sh train   # 80 epochs, then export to ml/detection/models/cow_person.*
 ```
 The report will give per-class precision/recall for the stock COCO model and the fine-tuned one on the same validation images; person recall is the number that matters most.
+
+## 5. Detector comparison: MobileNet-SSD vs YOLO11n (2026-10-24)
+
+A friend's Pi script used **MobileNet-SSD** (chuanqi305, Caffe, Pascal VOC, 300 px). It was scored against the rover's YOLO11n on the same 463 COCO validation images (cow + person boxes), with the same matching (IoU ≥ 0.5), OpenCV DNN 4.10, 4 threads: `python -m ml.detection.compare_detectors --data /root/lms-data/cow_person --ssd /root/lms-data/mobilenet_ssd [--min-frac 0.2] [--yolo PATH@SIZE]`. "Near" = objects at least 20 % of the image height (what the rover acts on).
+
+| Model | ms/frame (laptop, 4 thr) | Near cow AP50 / recall | Near person AP50 / recall | All cows AP50 | All people AP50 |
+|---|---|---|---|---|---|
+| MobileNet-SSD 300 | **12** | 0.60 / 0.61 | 0.61 / 0.58 | 0.26 | 0.30 |
+| YOLO11n 256 | 11 | 0.79 / 0.67 | 0.79 / 0.64 | 0.49 | 0.50 |
+| **YOLO11n 320 (rover)** | 15 | 0.80 / 0.77 | 0.82 / 0.71 | 0.50 | 0.56 |
+| YOLO11n 416 | 27 | **0.83 / 0.76** | **0.85 / 0.76** | **0.62** | **0.63** |
+| YOLO11n cow-only fine-tuned 320 | 18 | 0.75 / 0.74 | – | 0.58 | – |
+
+Decision: keep YOLO11n. The SSD is ~1.3–1.6× faster but misses about 4 in 10 near people and gets half the AP on all objects; its Caffe format is also gone from OpenCV 5. Nothing from it was reused except the observation that a smaller input is faster (256 px costs too much person recall).
+
+Quick wins done: the rover keeps more COCO classes (person, bird, cat, dog, horse, sheep, cow; follows cow/sheep/horse only); detectors take an input size (`yolo:PATH@416`, `ncnn:FOLDER@416`); COCO YOLO11n is exported at 416 px as ONNX and NCNN (`coco_yolo11n_416*`, NCNN output checked identical to ONNX on 40 images). Next: `python -m ml.detection.bench_pi` on the Pi 4 to pick between ONNX 320 (121 ms measured) and NCNN 320/416.

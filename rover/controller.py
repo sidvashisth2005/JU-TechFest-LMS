@@ -11,7 +11,8 @@ from rover.config import RoverConfig
 from rover.vision import Det
 
 DIRECTIONS = ("forward", "backward", "left", "right", "stop")
-FOLLOW_LABELS = ("cow", "green_marker", "sheep")  # in order of preference; never follow people
+# in order of preference; never follow people (or pets and birds the camera also reports)
+FOLLOW_LABELS = ("cow", "green_marker", "sheep", "horse")
 
 
 class Controller:
