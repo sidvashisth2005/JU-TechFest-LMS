@@ -9,7 +9,8 @@ $Exe = Join-Path $Bin "cloudflared.exe"
 if (-not (Test-Path $Exe)) {
     New-Item -ItemType Directory -Force $Bin | Out-Null
     Write-Host "downloading cloudflared to $Exe"
-    Invoke-WebRequest "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile $Exe
+    # curl.exe, not Invoke-WebRequest: the PowerShell 5 progress bar makes a 55 MB download crawl
+    curl.exe -sSL -o $Exe "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
 }
 $Root = Split-Path -Parent $PSScriptRoot
 $Log = Join-Path $Root "logs\tunnel.log"
