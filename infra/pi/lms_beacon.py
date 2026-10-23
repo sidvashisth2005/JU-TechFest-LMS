@@ -7,7 +7,8 @@ hears it and keeps .env and the Pi's MQTT_HOST pointed at the right addresses.
 
 When the address changes (first connect after boot, another Wi-Fi, a new DHCP lease) it also sends
 one Telegram message, if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are in ~/.config/lms/beacon.env,
-so you can find the Pi from your phone without the laptop.
+so you can find the Pi from your phone without the laptop. The message also carries the dashboard
+link: the laptop's address is the Pi's MQTT_HOST (kept current by the laptop's pi_watch).
 
 Standard library only (system python3). Installed by infra/pi/install_beacon.sh.
 """
@@ -59,6 +60,20 @@ def addresses() -> list[tuple[str, str, str]]:
     return out
 
 
+def dashboard_link() -> str | None:
+    """http://<laptop>:8000 from MQTT_HOST in the rover's or barn's .env (the laptop runs both)."""
+    for env in (Path.home() / "lms-rover" / ".env", Path.home() / "lms" / ".env"):
+        try:
+            for line in env.read_text().splitlines():
+                if line.startswith("MQTT_HOST="):
+                    host = line.split("=", 1)[1].strip()
+                    if host and host not in ("127.0.0.1", "localhost"):
+                        return f"http://{host}:8000"
+        except OSError:
+            continue
+    return None
+
+
 def wifi_name() -> str:
     return run("nmcli", "-t", "-g", "GENERAL.CONNECTION", "device", "show", "wlan0").strip()
 
@@ -100,6 +115,9 @@ def main() -> None:
                     f"🟢 {host}{f' ({role})' if role else ''} is online\n"
                     f"IP {', '.join(ips)}\nWi-Fi {ssid or '?'}\nssh {user}@{ips[0]}"
                 )
+                link = dashboard_link()
+                if link:
+                    text += f"\n📊 Dashboard {link}"
                 if telegram(conf, text):
                     told = tuple(ips)
         time.sleep(EVERY_S)

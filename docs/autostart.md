@@ -115,7 +115,7 @@ Pi pe (ya laptop se `ssh pi@<pi-ip> "<command>"`):
 | Tarika | Kab kaam aata hai | Kaise |
 |---|---|---|
 | **Beacon (automatic)** | Pi kisi bhi Wi-Fi se jude | Dono Pi har 10 s apna IP broadcast karte hain (`lms-beacon` user service). Laptop pe `run_all` ka `piwatch` sunta hai aur `.env` + Pi ka `MQTT_HOST` khud update karta hai (`logs\piwatch.log`). IP badla to **Telegram** pe message bhi |
-| **Phone pe dashboard** | phone same Wi-Fi pe | laptop ka IP badalte hi Telegram pe link aata hai: `http://<laptop-ip>:8000` (`dashlink` worker, `run_all` me) |
+| **Phone pe dashboard** | phone same Wi-Fi pe | Telegram pe link aata hai: laptop backend start hone pe, laptop ka IP badalne pe, aur har Pi ke "online" message me. Bot ko `/link` bhejo to kabhi bhi turant link (`dashlink` worker, `run_all` me) |
 | **Laptop finder** (sabse aasaan) | Pi aur laptop same Wi-Fi pe | `.venv\Scripts\python infra\find_pi.py` → dono Pi ka IP. `--update` = laptop `.env` (ROVER_URL, BARN_PI) + Pi ki `.env` (MQTT_HOST) khud update |
 | **LAN cable** | Wi-Fi nahi, laptop me Ethernet port | Pi ↔ laptop cable, phir wahi `find_pi.py` (IPv6 link-local se dhoondhta hai) |
 | **Barn Pi LED** | barn Pi | service start hote hi `IP 10.x.x.x` scroll; joystick se IP screen bhi |
