@@ -22,7 +22,7 @@ An autonomous rover and wearable sensor collars that watch over a herd, plus a d
 .\infra\run_all.ps1 -Simulator -MockRover    # then open http://localhost:8000
 ```
 
-Full setup: [docs/setup.md](docs/setup.md) · Design: [docs/architecture.md](docs/architecture.md) · ML: [docs/ml.md](docs/ml.md) · Hosting: [docs/hosting.md](docs/hosting.md)
+Full setup: [docs/setup.md](docs/setup.md) · Design: [docs/architecture.md](docs/architecture.md) · ML: [docs/ml.md](docs/ml.md) · Hosting: [docs/hosting.md](docs/hosting.md) · Demo: [docs/demo.md](docs/demo.md) · Real deployment: [docs/deployment.md](docs/deployment.md) · Plain-language guide (Hinglish): [docs/GUIDE.md](docs/GUIDE.md)
 
 ## Layout
 

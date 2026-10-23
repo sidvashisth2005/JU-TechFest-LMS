@@ -37,21 +37,51 @@ For dashboard development with hot reload: `cd web; npm run dev` (http://localho
 
 Create a bot with @BotFather, put the token in `.env` as `TELEGRAM_BOT_TOKEN`, message the bot once, and set `TELEGRAM_CHAT_ID` (the chat id is in `https://api.telegram.org/bot<TOKEN>/getUpdates`). Warning and critical alerts are sent; each animal+kind at most once per 3 hours.
 
-## 5. Raspberry Pi (rover)
+## 5. Raspberry Pi (rover + barn sensors)
 
-Raspberry Pi OS 64-bit (Trixie). Packages: `python3-opencv python3-picamera2 python3-sense-hat python3-serial python3-spidev i2c-tools`; SPI and I2C enabled; venv with `--system-site-packages`; BrickPi3 from the DexterInd repo. Details and the Pixy2 build are in `CLAUDE.md`.
+Raspberry Pi OS 64-bit (Trixie). Packages: `python3-opencv python3-picamera2 python3-sense-hat python3-serial python3-spidev i2c-tools`. SPI and I2C must be enabled. Make the venv with `python3 -m venv --system-site-packages ~/lms-venv` and install BrickPi3 from the DexterInd repo. Details and the Pixy2 build are in `CLAUDE.md`.
+
+Deploy from the laptop (Git Bash, repo root). This copies the committed code, installs the Python packages, creates `~/lms-rover/.env` the first time (MQTT and rover token taken from the laptop `.env`), and installs the systemd services:
 
 ```bash
-~/lms-venv/bin/pip install -r rover/requirements.txt
-~/lms-venv/bin/python -m rover.server --camera picamera2 --detector yolo:ml/detection/models/cow.onnx --mqtt <laptop-ip>
+bash infra/pi/deploy.sh                       # PI=pi@<ip> bash infra/pi/deploy.sh if the IP changed
+ssh pi@<pi-ip> "~/lms-rover/infra/pi/lms-pi.sh start rover"      # rover | sensehat | uno | pixy | all
+ssh pi@<pi-ip> "~/lms-rover/infra/pi/lms-pi.sh status"
+ssh pi@<pi-ip> "~/lms-rover/infra/pi/lms-pi.sh enable all"       # start at every boot
 ```
 
-Then set `ROVER_URL=http://<pi-ip>:8080` in the laptop's `.env`. For devices on the LAN to reach the laptop's MQTT broker, allow inbound TCP 1883 in Windows Firewall (and Hyper-V firewall for WSL).
+| Service | What it runs | Settings in `~/lms-rover/.env` |
+|---|---|---|
+| `lms-rover` | `rover.server` on :8080 (camera, detector, motors, ultrasonic, safety) | `ROVER_CAMERA`, `ROVER_DETECTOR`, `ROVER_TOKEN`, `ROVER_TURN_SIGN`, `ROVER_DRIVE_SIGN` |
+| `lms-sensehat` | `barn.sensehat_pub` (temperature, humidity, pressure → MQTT) | `BARN_STATION`, `BARN_INTERVAL` |
+| `lms-uno-bridge` | `barn.serial_bridge` (UNO or ESP-NOW gateway USB serial → MQTT) | `UNO_PORT`, `UNO_ANIMAL` |
+| `lms-pixy-stream` | `pi-tools/pixy_stream.py` on :8000 (camera test page; cannot run with the rover) | — |
 
-First drive on hardware: lift the tracks, try Manual forward/left/right. If left/right are swapped run with `--turn-sign -1`; if forward goes backward, set `drive_sign = -1` in `rover/config.py`.
+The laptop's `.env` needs `ROVER_URL=http://<pi-ip>:8080` and the same `ROVER_TOKEN` as the Pi. For the Pi and the collars to reach the laptop's MQTT broker, allow inbound TCP 1883 in Windows Firewall, and in the Hyper-V firewall for WSL (admin PowerShell):
+
+```powershell
+New-NetFirewallRule -DisplayName "LMS MQTT" -Direction Inbound -Protocol TCP -LocalPort 1883 -Action Allow
+Set-NetFirewallHyperVVMSetting -Name '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -DefaultInboundAction Allow
+```
+
+The first drive on hardware must be done with the tracks lifted. Try Manual forward/left/right from the dashboard Rover page. If left and right are swapped, set `ROVER_TURN_SIGN=-1`. If forward drives backward, set `ROVER_DRIVE_SIGN=-1`. Restart the rover after either change.
+
+YOLO on the Pi: `ROVER_DETECTOR=yolo:ml/detection/models/coco_yolo11n.onnx` (OpenCV, ~8 fps measured), or `ncnn:ml/detection/models/coco_yolo11n_ncnn_model` (needs `pip install ncnn`; usually faster on ARM, so benchmark both).
 
 ## 6. Collars
 
-- ESP32 collar: `firmware/collar_esp32` — copy `include/lms_config.example.h` to `include/lms_config.h`, fill in Wi-Fi/MQTT/animal id, `pio run -t upload`.
-- UNO prototype: `firmware/uno_bridge` (`pio run -t upload`), then on the Pi `python -m barn.serial_bridge --port /dev/ttyACM0`.
-- Sense HAT barn station: `python -m barn.sensehat_pub --station barn1`.
+- **ESP32 collar** (`firmware/collar_esp32`). Copy `include/lms_config.example.h` to `include/lms_config.h` and fill in the Wi-Fi, MQTT and animal id. Then pick a mode:
+  - `pio run -e wifi -t upload`: always on, reading every 5 s. Best for demos.
+  - `pio run -e wifi_sleep -t upload`: wakes every 60 s, measures 6 s, sends over Wi-Fi, then deep sleeps.
+  - `pio run -e espnow -t upload`: same as `wifi_sleep`, but sends over ESP-NOW to the gateway. Longest battery life and no router needed.
+- **ESP-NOW gateway** (`firmware/gateway_espnow`, any ESP32 on the Pi's USB): `pio run -t upload`. Then on the Pi set `UNO_PORT=/dev/ttyUSB0` and start the `uno` service; it forwards every collar.
+- **UNO prototype** (`firmware/uno_bridge`): `pio run -t upload`, plug it into the Pi, and start the `uno` service (`UNO_PORT=/dev/ttyACM0`).
+- **Sense HAT barn station**: the `sensehat` service (`python -m barn.sensehat_pub --station barn1`).
+
+## 7. Tests
+
+```powershell
+.venv\Scripts\python -m pytest            # unit + API tests; DB tests skip when services are down
+$env:LMS_E2E=1; .venv\Scripts\python -m pytest tests\test_e2e.py -v   # with run_all.ps1 running: MQTT -> DB -> API
+.venv\Scripts\ruff check .
+```
