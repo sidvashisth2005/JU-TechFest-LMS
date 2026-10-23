@@ -1,6 +1,6 @@
 # LMS (Livestock Monitoring System) — Briefing for Claude Code
 
-## ⏸ PAUSED HERE — 2026-10-09 (hardware), software phase in progress
+## ⏸ PAUSED HERE — 2026-10-09 (hardware). Software phase S0–S12 DONE on 2026-10-10 — only hardware steps remain
 **Hardware status:** Phase 0–2 done, motors + ultrasonic + Pixy2 camera tested (see checklist). Lab closed, so components (Pi, BrickPi, motors, sensors, Pixy) are NOT with the user right now. Pi is off — don't try to SSH until the user says hardware is back.
 
 **Last hardware step in progress:** Pixy2 lens focus (image totally blurry even at 60 cm; user to rotate the lens while watching `http://localhost:8000`).
@@ -119,7 +119,7 @@ When everything passes: reassemble, then run `Rover/picam_motor_Auto&manual-move
 - [x] S7b `ml/anomaly/` detector — eval (21 d, 50 cows): fever recall 98%, lameness 95%, estrus 91%, dropout 100%, precision 77–80%, 6–7 false/100 cow-days; reports in simulator/out/eval_*/report.json
 - [x] S10 `web/` dashboard (Herd, Animal, Alerts, Barn, Rover, Disease; screenshots verified with Playwright)
 - [x] S8 `rover/` server: mock + real drivers, cameras (webcam/video/synthetic/picamera2/pixy2), green + YOLO-ONNX detectors, IoU tracker, PD follow, safety (obstacle/255-after-close/battery/watchdog). `turn_sign` needs hardware calibration.
-- [~] S7c YOLO cow detection: WSL venv `/root/lms-ml` (torch 2.14+cu126, ultralytics, fiftyone) ready; pipeline `ml/detection/run_pipeline.sh` running detached (log `/root/lms-pipeline.log`, runs `/root/lms-runs/cow-yolo11n`, data `/root/lms-data/cows`); thermal guard 78→70 °C. When done: `ml/detection/models/cow.onnx` + `report.json`; then add results to docs/ml.md and test `python -m rover.server --mock --camera video:<cow clip> --detector yolo:ml/detection/models/cow.onnx`.
+- [x] S7c YOLO cow detection: fine-tuned YOLO11n mAP50 0.726 (stock 0.631), recall 0.66 (0.57); 66 min training, GPU peak 64 °C, no thermal pauses. Model in git: `ml/detection/models/cow.onnx` (+ NCNN). WSL: venv `/root/lms-ml`, data `/root/lms-data/cows`, runs `/root/lms-runs`. Rerun: `bash ml/detection/run_pipeline.sh`. TODO on hardware: benchmark ONNX vs NCNN on the Pi 4.
 - [x] S9 firmware: ESP32 collar compiles (RAM 14%, flash 61%); UNO bridge compiles (RAM 94% — tight); barn/ serial bridge + Sense HAT publisher (+tests)
 - [x] S11 hosting: `infra/run_all.ps1 [-Simulator] [-MockRover] [-Tunnel]`, `infra/stop_all.ps1`, `infra/tunnel.ps1` (Cloudflare quick tunnel — not started yet; ask before exposing publicly)
 - [x] S12 CI (.github/workflows/ci.yml) + docs/ (setup, architecture, ml, hosting) + README
