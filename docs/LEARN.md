@@ -60,10 +60,12 @@ Padhne ka tarika: upar se neeche order mein padho — har part pichhle pe based 
 - **Humne kaise use kiya:** Right motor = Port C, left = Port D. Test mein 40% power 2 sec → C 1578°, D 1449° (encoders sahi). Battery `bp.get_voltage_battery()` = ~11 V. Code: `rover/drivers/brickpi.py`.
 - **Khud kaise karoge:**
   ```python
-  import brickpi3; bp = brickpi3.BrickPi3()
-  bp.set_motor_dps(bp.PORT_C, 300)   # 300 degree/sec
+  import brickpi3
+
+  bp = brickpi3.BrickPi3()
+  bp.set_motor_dps(bp.PORT_C, 300)  # 300 degree/sec
   print(bp.get_motor_encoder(bp.PORT_C))
-  bp.reset_all()                     # hamesha end mein - motors band
+  bp.reset_all()  # hamesha end mein - motors band
   ```
   ⚠️ Pehle tracks hawa mein uthao.
 

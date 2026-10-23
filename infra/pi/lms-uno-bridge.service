@@ -1,0 +1,15 @@
+[Unit]
+Description=LMS collar prototype: Arduino UNO serial JSON to MQTT
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/lms-rover
+EnvironmentFile=/home/pi/lms-rover/.env
+ExecStart=/home/pi/lms-venv/bin/python -m barn.serial_bridge --port ${UNO_PORT} --animal ${UNO_ANIMAL}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

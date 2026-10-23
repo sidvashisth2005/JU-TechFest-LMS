@@ -12,6 +12,10 @@ router = APIRouter(prefix="/api/rover", tags=["rover"], dependencies=[Depends(re
 TIMEOUT = httpx.Timeout(3.0, read=5.0)
 
 
+def _headers() -> dict:
+    return {"X-Rover-Token": settings.rover_token} if settings.rover_token else {}
+
+
 def _url(path: str) -> str:
     if not settings.rover_url:
         raise HTTPException(503, "ROVER_URL not configured")
@@ -21,9 +25,12 @@ def _url(path: str) -> str:
 async def _forward(method: str, path: str, json=None):
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-            r = await client.request(method, _url(path), json=json)
+            r = await client.request(method, _url(path), json=json, headers=_headers())
     except httpx.HTTPError as e:
         raise HTTPException(503, f"rover unreachable: {type(e).__name__}") from e
+    if r.status_code == 401:
+        # the rover rejected our ROVER_TOKEN; don't pass 401 on, or the dashboard logs the user out
+        raise HTTPException(502, "rover rejected ROVER_TOKEN (check .env on laptop and Pi)")
     if r.status_code >= 400:
         raise HTTPException(r.status_code, r.text[:300])
     return r.json()
@@ -48,7 +55,7 @@ async def mode(request: Request):
 async def stream():
     client = httpx.AsyncClient(timeout=httpx.Timeout(3.0, read=None))
     try:
-        req = client.build_request("GET", _url("/stream.mjpg"))
+        req = client.build_request("GET", _url("/stream.mjpg"), headers=_headers())
         resp = await client.send(req, stream=True)
     except httpx.HTTPError as e:
         await client.aclose()

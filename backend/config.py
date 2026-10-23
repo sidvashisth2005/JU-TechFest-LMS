@@ -27,6 +27,7 @@ class Settings:
     admin_password: str = os.environ.get("API_ADMIN_PASSWORD", "")
     jwt_secret: str = os.environ.get("API_JWT_SECRET", "")
     rover_url: str = os.environ.get("ROVER_URL", "")
+    rover_token: str = os.environ.get("ROVER_TOKEN", "")
     telegram_token: str = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     telegram_chat_id: str = os.environ.get("TELEGRAM_CHAT_ID", "")
 

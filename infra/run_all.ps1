@@ -13,13 +13,15 @@ New-Item -ItemType Directory -Force $Logs | Out-Null
 
 & (Join-Path $PSScriptRoot "start_services.ps1")
 
+# Each part runs under backend.supervise, which restarts it whenever it exits (crash, lost
+# connection) and appends its output to logs\<name>.log.
 function Start-Part($name, [string[]]$arguments) {
     $running = Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
-        Where-Object { $_.CommandLine -match [regex]::Escape($arguments[1]) }
+        Where-Object { $_.CommandLine -match "backend\.supervise $name " }
     if ($running) { Write-Host "$name already running"; return }
-    Start-Process -WindowStyle Hidden -WorkingDirectory $Root -FilePath $Py -ArgumentList $arguments `
-        -RedirectStandardOutput (Join-Path $Logs "$name.log") -RedirectStandardError (Join-Path $Logs "$name.err.log")
-    Write-Host "$name started"
+    $all = @("-m", "backend.supervise", $name, "--") + $arguments
+    Start-Process -WindowStyle Hidden -WorkingDirectory $Root -FilePath $Py -ArgumentList $all
+    Write-Host "$name started (auto-restart on)"
 }
 
 Start-Part "ingest" @("-m", "backend.workers.ingest")

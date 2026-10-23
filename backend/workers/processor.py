@@ -41,7 +41,7 @@ class Processor:
     def __init__(self, name: str):
         self.name = name
         self.r = redis.from_url(settings.redis_url)
-        self.db = psycopg.connect(settings.database_url, autocommit=False)
+        self.db = self._connect()
         self.detector = Detector()
         self.stop = False
         try:
@@ -49,6 +49,32 @@ class Processor:
         except redis.ResponseError as e:
             if "BUSYGROUP" not in str(e):
                 raise
+
+    @staticmethod
+    def _connect():
+        """Connect to the database, retrying with backoff (it may still be starting)."""
+        delay = 1.0
+        while True:
+            try:
+                return psycopg.connect(settings.database_url, autocommit=False, connect_timeout=10)
+            except psycopg.OperationalError as e:
+                log.warning("database not reachable (%s); retrying in %.0fs", e, delay)
+                time.sleep(delay)
+                delay = min(delay * 2, 30)
+
+    def _recover_db(self) -> None:
+        """After a failed write: roll back, or reconnect if the connection itself is gone."""
+        try:
+            self.db.rollback()
+        except psycopg.Error:
+            pass
+        if self.db.closed or self.db.broken:
+            log.warning("database connection lost; reconnecting")
+            try:
+                self.db.close()
+            except psycopg.Error:
+                pass
+            self.db = self._connect()
 
     # ---------- startup ----------
     def warmup(self, hours: float = 48) -> None:
@@ -98,16 +124,22 @@ class Processor:
             if cursor == "0" and not entries:
                 cursor = ">"
                 continue
-            if entries:
-                self.handle(entries)
+            if entries and not self.handle(entries):
+                cursor = "0"  # re-read our pending (unacknowledged) entries on the next pass
             if time.time() >= next_tick:
-                saved = self.insert_alerts(self.detector.tick(time.time()))
-                resolved = self.resolve_alerts()
-                self.db.commit()
-                self.publish_alerts(saved, resolved)
                 next_tick = time.time() + TICK_S
+                try:
+                    saved = self.insert_alerts(self.detector.tick(time.time()))
+                    resolved = self.resolve_alerts()
+                    self.db.commit()
+                except psycopg.Error:
+                    log.exception("alert tick failed")
+                    self._recover_db()
+                    continue
+                self.publish_alerts(saved, resolved)
 
-    def handle(self, entries) -> None:
+    def handle(self, entries) -> bool:
+        """Process a batch; False if it could not be stored (left pending for a retry)."""
         groups = defaultdict(list)
         ids = []
         for entry_id, fields in entries:
@@ -136,16 +168,17 @@ class Processor:
             resolved = self.resolve_alerts()
             self.db.commit()
         except Exception:
-            self.db.rollback()
+            self._recover_db()
             log.exception("DB write failed; batch left unacknowledged for retry")
             time.sleep(2)
-            return
+            return False
         self.r.xack(STREAM_IN, STREAM_GROUP, *ids)
         pipe = self.r.pipeline()
         for item in live:
             pipe.publish(CHANNEL_LIVE, json.dumps(item))
         pipe.execute()
         self.publish_alerts(saved, resolved)
+        return True
 
     def write(self, groups) -> None:
         with self.db.cursor() as cur:

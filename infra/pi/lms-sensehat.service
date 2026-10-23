@@ -1,0 +1,15 @@
+[Unit]
+Description=LMS barn station: Sense HAT temperature/humidity/pressure to MQTT
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/lms-rover
+EnvironmentFile=/home/pi/lms-rover/.env
+ExecStart=/home/pi/lms-venv/bin/python -m barn.sensehat_pub --station ${BARN_STATION} --interval ${BARN_INTERVAL}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

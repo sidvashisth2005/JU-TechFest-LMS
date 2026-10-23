@@ -1,0 +1,16 @@
+[Unit]
+Description=LMS rover server (camera, detection, motors, safety) on :8080
+After=network-online.target
+Wants=network-online.target
+Conflicts=lms-pixy-stream.service
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/lms-rover
+EnvironmentFile=/home/pi/lms-rover/.env
+ExecStart=/home/pi/lms-venv/bin/python -m rover.server --camera ${ROVER_CAMERA} --detector ${ROVER_DETECTOR} --mqtt ${MQTT_HOST}
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

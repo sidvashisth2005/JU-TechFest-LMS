@@ -49,3 +49,7 @@ firmware/**/include/lms_config.h
 # Claude Code local state
 .claude/scheduled_tasks.lock
 ml/detection/models/cow_ncnn_model/model_ncnn.py
+
+# large media kept beside the repo, not in git
+*.pptx
+*.mp4

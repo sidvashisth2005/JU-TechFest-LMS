@@ -14,6 +14,7 @@ Endpoints (the dashboard reaches them through the backend's /api/rover proxy):
 """
 
 import argparse
+import hmac
 import logging
 import os
 import threading
@@ -22,8 +23,8 @@ from contextlib import asynccontextmanager
 
 import cv2
 import uvicorn
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import Response, StreamingResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from common import topics
@@ -188,13 +189,25 @@ class MockIn(BaseModel):
     battery_v: float | None = None
 
 
-def make_app(rover: Rover) -> FastAPI:
+def make_app(rover: Rover, token: str | None = None) -> FastAPI:
+    """`token`: when set, every request must carry header `X-Rover-Token: <token>` (the
+    laptop backend adds it). Keeps people on the same Wi-Fi from driving the rover."""
+
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         yield
         rover.close()
 
     app = FastAPI(title="LMS rover", lifespan=lifespan)
+
+    if token:
+
+        @app.middleware("http")
+        async def require_token(request: Request, call_next):
+            given = request.headers.get("x-rover-token", "")
+            if not hmac.compare_digest(given, token):
+                return JSONResponse({"detail": "rover token required"}, status_code=401)
+            return await call_next(request)
 
     @app.get("/status")
     def status():
@@ -265,15 +278,23 @@ def main():
     ap.add_argument("--detector", default="green", help="green | yolo:PATH.onnx")
     ap.add_argument("--port", type=int, default=8080)
     ap.add_argument("--mqtt", default=os.environ.get("ROVER_MQTT_HOST"), help="broker host for status/detections")
-    ap.add_argument("--turn-sign", type=int, choices=[-1, 1], default=1)
+    ap.add_argument("--turn-sign", type=int, choices=[-1, 1], default=int(os.environ.get("ROVER_TURN_SIGN", 1)))
+    ap.add_argument("--drive-sign", type=int, choices=[-1, 1], default=int(os.environ.get("ROVER_DRIVE_SIGN", 1)))
+    ap.add_argument("--token", default=os.environ.get("ROVER_TOKEN"), help="shared secret (env ROVER_TOKEN)")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
-    cfg = RoverConfig(turn_sign=args.turn_sign)
+    cfg = RoverConfig(turn_sign=args.turn_sign, drive_sign=args.drive_sign)
     client = mqtt_connect(args.mqtt) if args.mqtt else None
     rover = Rover(cfg, args.camera, args.detector, args.mock, client)
-    log.info("rover up: camera=%s detector=%s mock=%s", rover.camera.name, rover.detector.name, args.mock)
-    uvicorn.run(make_app(rover), host="0.0.0.0", port=args.port, log_level="warning")
+    log.info(
+        "rover up: camera=%s detector=%s mock=%s token=%s",
+        rover.camera.name,
+        rover.detector.name,
+        args.mock,
+        "on" if args.token else "OFF (anyone on the network can drive)",
+    )
+    uvicorn.run(make_app(rover, args.token), host="0.0.0.0", port=args.port, log_level="warning")
 
 
 if __name__ == "__main__":

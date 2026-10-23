@@ -6,6 +6,7 @@ python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
 import asyncio
 import json
 import logging
+import re
 from contextlib import asynccontextmanager
 
 import redis.asyncio as aioredis
@@ -17,6 +18,22 @@ from backend.api import auth, db, routes, rover
 from backend.config import CHANNEL_LIVE, ROOT, settings
 
 log = logging.getLogger("api")
+
+
+class RedactTokens(logging.Filter):
+    """The video stream and WebSocket pass the login token as ?token=...; keep it out of logs."""
+
+    pattern = re.compile(r"token=[^&\s\"]+")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.args:
+            record.args = tuple(self.pattern.sub("token=***", a) if isinstance(a, str) else a for a in record.args)
+        record.msg = self.pattern.sub("token=***", str(record.msg))
+        return True
+
+
+for _name in ("uvicorn.access", "uvicorn.error"):
+    logging.getLogger(_name).addFilter(RedactTokens())
 WEB_DIST = ROOT / "web" / "dist"
 
 
