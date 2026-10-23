@@ -57,4 +57,13 @@ The hackathon rover followed a green marker and the web app used a Roboflow *per
 - Training on the laptop GPU with a thermal guard (pauses above 78 °C until 70 °C, short rest after each batch).
 - Export: ONNX at 320 px for OpenCV DNN (laptop and Pi) and NCNN for the Pi 4.
 
-Reproduce (in WSL): `python -m ml.detection.prepare_data`, `python -m ml.detection.train`, `python -m ml.detection.export --weights ~/lms-runs/cow-yolo11n/weights/best.pt`. Results are written to `~/lms-runs/cow-yolo11n/report.json`.
+**Results** (validation: 139 images never used in training — COCO 2017 val cows + held-out Open Images cattle):
+
+| Model | mAP50 | mAP50-95 | Precision | Recall |
+|---|---|---|---|---|
+| Stock YOLO11n (COCO "cow" class) | 0.631 | 0.440 | 0.718 | 0.567 |
+| **Fine-tuned YOLO11n (ours)** | **0.726** | **0.491** | **0.749** | **0.659** |
+
+Training data: 3,638 images (1,968 COCO cow, 470 Open Images cattle, 1,200 negatives). 60 epochs at 512 px took 66 minutes on the RTX 3050 laptop GPU; the thermal guard log shows a peak of 64 °C and no pauses. The exported ONNX model (320 px) runs at about 10 ms per frame on the laptop CPU through `rover/vision.py`, and finds cows on grass where the legacy green-marker tracker locks onto the field. Pi 4 speed (ONNX via OpenCV and NCNN) is to be measured when the hardware is back.
+
+Reproduce (in WSL): `bash ml/detection/run_pipeline.sh`, or step by step `python -m ml.detection.prepare_data`, `python -m ml.detection.train`, `python -m ml.detection.export --weights ~/lms-runs/cow-yolo11n/weights/best.pt`. Results are written to `~/lms-runs/cow-yolo11n/report.json`.

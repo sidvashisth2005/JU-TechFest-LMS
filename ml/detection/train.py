@@ -17,6 +17,7 @@ import argparse
 import csv
 import json
 import os
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -78,14 +79,17 @@ class ThermalGuard:
 
 def coco_view(data_dir: Path) -> Path:
     """A validation view whose labels use COCO id 19, so the stock model can be scored."""
+    # real copies, not symlinks: Ultralytics resolves symlinked images to their real path and
+    # would then read the class-0 labels next to them (that gave a bogus 0.0 baseline)
     view = data_dir / "val_coco"
-    (view / "images").mkdir(parents=True, exist_ok=True)
     img, lbl = view / "images" / "val", view / "labels" / "val"
-    if not img.exists():
-        img.symlink_to(data_dir / "images" / "val", target_is_directory=True)
-    lbl.parent.mkdir(parents=True, exist_ok=True)
-    if not lbl.exists():
-        lbl.symlink_to(data_dir / "labels_coco" / "val", target_is_directory=True)
+    for src, dst in ((data_dir / "images" / "val", img), (data_dir / "labels_coco" / "val", lbl)):
+        if dst.is_symlink():
+            dst.unlink()
+        if not dst.exists():
+            shutil.copytree(src, dst)
+    for cache in view.rglob("*.cache"):
+        cache.unlink()
     names = "\n".join(f"  {i}: c{i}" for i in range(80)).replace(f"  {COCO_COW}: c{COCO_COW}", f"  {COCO_COW}: cow")
     yaml = view / "data.yaml"
     yaml.write_text(f"path: {view}\ntrain: images/val\nval: images/val\nnames:\n{names}\n")
@@ -114,6 +118,7 @@ def main():
     ap.add_argument("--rest", type=float, default=0.05, help="seconds of rest after each batch")
     ap.add_argument("--project", default=str(Path.home() / "lms-runs"))
     ap.add_argument("--name", default="cow-yolo11n")
+    ap.add_argument("--baseline-only", action="store_true", help="only score the stock model and update report.json")
     args = ap.parse_args()
 
     data_dir = Path(args.data).expanduser()
@@ -123,6 +128,12 @@ def main():
     print("== baseline: stock COCO YOLO11n, class 'cow' ==", flush=True)
     report["baseline"] = score(YOLO(args.model), coco_view(data_dir), args.imgsz, classes=[COCO_COW])
     print(report["baseline"], flush=True)
+    if args.baseline_only:
+        path = run_dir / "report.json"
+        old = json.loads(path.read_text()) if path.exists() else {}
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({**old, "baseline": report["baseline"]}, indent=2))
+        return
 
     model = YOLO(args.model)
     guard = ThermalGuard(run_dir.parent / f"{args.name}-thermal.csv", args.hot, args.cool, args.rest, 20)

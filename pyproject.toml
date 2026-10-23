@@ -7,7 +7,7 @@ requires-python = ">=3.11"
 [tool.ruff]
 line-length = 120
 target-version = "py311"
-extend-exclude = ["legacy", "web", "ml/**/datasets", "ml/**/runs"]
+extend-exclude = ["legacy", "web", "ml/**/datasets", "ml/**/runs", "ml/detection/models"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]

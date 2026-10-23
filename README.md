@@ -13,6 +13,7 @@ An autonomous rover and wearable sensor collars that watch over a herd, plus a d
 
 - **Health alerts** (simulated herd, 50 cows × 21 days): fever caught 98% (median 1.5 h), lameness 95%, estrus 91%, offline collars 100%; zero false fever alarms and zero alarms from sensor glitches. [Details](docs/ml.md)
 - **Disease suggestions** with only 2–3 symptoms ticked: right disease in the top 3 for 97.8% of cases (hackathon model: 51%).
+- **Cow detection** (fine-tuned YOLO11n): mAP50 0.726 vs 0.631 for the stock model, recall 0.66 vs 0.57; ~10 ms/frame on a laptop CPU.
 - **Rover**: follow mode and obstacle stop verified end to end with simulated hardware; hardware tests of motors, ultrasonic and camera passed on the Pi.
 
 ## Run it

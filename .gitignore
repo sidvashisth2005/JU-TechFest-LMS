@@ -23,6 +23,10 @@ ml/**/runs/
 *.pt
 *.onnx
 *_ncnn_model/
+# ...except the deployed cow detector, so the Pi gets it with git pull
+!ml/detection/models/cow.onnx
+!ml/detection/models/cow_ncnn_model/
+ml/detection/models/cow_ncnn_model/__pycache__/
 ml/**/artifacts/*.joblib
 
 # Simulator / runtime output
@@ -41,3 +45,6 @@ logs/
 firmware/**/include/lms_config.h
 # PlatformIO build output and downloaded libraries
 .pio/
+# Claude Code local state
+.claude/scheduled_tasks.lock
+ml/detection/models/cow_ncnn_model/model_ncnn.py
