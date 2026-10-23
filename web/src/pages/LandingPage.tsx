@@ -40,11 +40,12 @@ const Index = () => {
     },
   ];
 
+  // measured results (docs/ml.md): simulated 50-cow herd over 21 days, COCO/Open Images validation
   const stats = [
-    { value: "95%", label: "Detection Accuracy" },
-    { value: "24/7", label: "Monitoring" },
-    { value: "< 1min", label: "Response Time" },
-    { value: "80%", label: "Cost Reduction" },
+    { value: "98%", label: "Fevers caught (test herd)" },
+    { value: "97.8%", label: "Right disease in top 3" },
+    { value: "0.73", label: "Cow detection mAP50" },
+    { value: "8 fps", label: "Detection on the rover Pi" },
   ];
 
   return (
@@ -111,28 +112,28 @@ const Index = () => {
                     <div className="bg-[hsl(142,55%,45%,0.1)] rounded-2xl p-6 animate-float">
                       <Shield className="w-10 h-10 text-[hsl(152,45%,30%)] mb-3" />
                       <p className="font-semibold text-[hsl(152,40%,20%)]">
-                        Protected
+                        Monitored
                       </p>
-                      <p className="text-3xl font-bold text-gradient">1,250</p>
+                      <p className="text-3xl font-bold text-gradient">50</p>
                       <p className="text-sm text-[hsl(152,20%,45%)]">
-                        Livestock
+                        Cows in demo herd
                       </p>
                     </div>
                     <div className="bg-[hsl(25,90%,55%,0.1)] rounded-2xl p-6 animate-float delay-200">
                       <TrendingUp className="w-10 h-10 text-[hsl(25,90%,55%)] mb-3" />
                       <p className="font-semibold text-[hsl(152,40%,20%)]">
-                        Health
+                        Fever
                       </p>
                       <p className="text-3xl font-bold text-[hsl(25,90%,55%)]">
                         98%
                       </p>
-                      <p className="text-sm text-[hsl(152,20%,45%)]">Optimal</p>
+                      <p className="text-sm text-[hsl(152,20%,45%)]">Caught early</p>
                     </div>
                     <div className="col-span-2 bg-gradient-to-r from-[hsl(152,45%,30%)] to-[hsl(142,55%,45%)] rounded-2xl p-6 text-white">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm opacity-80">Active Alerts</p>
-                          <p className="text-2xl font-bold">143</p>
+                          <p className="text-sm opacity-80">Alerts go to</p>
+                          <p className="text-2xl font-bold">Dashboard + Telegram</p>
                         </div>
                         <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center animate-pulse-glow">
                           <CheckCircle className="w-6 h-6" />
