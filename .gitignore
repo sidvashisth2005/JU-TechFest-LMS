@@ -39,3 +39,5 @@ Thumbs.db
 logs/
 # local firmware secrets
 firmware/**/include/lms_config.h
+# PlatformIO build output and downloaded libraries
+.pio/
