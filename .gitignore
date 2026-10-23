@@ -25,6 +25,7 @@ ml/**/runs/
 *_ncnn_model/
 # ...except the deployed cow detector, so the Pi gets it with git pull
 !ml/detection/models/cow.onnx
+!ml/detection/models/coco_yolo11n.onnx
 !ml/detection/models/cow_ncnn_model/
 ml/detection/models/cow_ncnn_model/__pycache__/
 ml/**/artifacts/*.joblib
