@@ -16,7 +16,8 @@ const Navigation = () => {
   const location = useLocation();
   const { loggedIn, logout } = useAuth();
   const active = (path: string) => location.pathname === path || location.pathname.startsWith(`${path}/`);
-  const items = loggedIn ? navItems : [];
+  // the disease checker is free for everyone; the rest needs a login
+  const items = loggedIn ? navItems : navItems.filter((i) => i.path === "/disease");
 
   return (
     <nav className="fixed left-1/2 top-4 z-50 w-[95%] max-w-6xl -translate-x-1/2">

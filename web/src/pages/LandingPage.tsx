@@ -10,6 +10,7 @@ import {
   BarChart3,
   Leaf,
   Sun,
+  Stethoscope,
 } from "lucide-react";
 
 const Index = () => {
@@ -43,7 +44,7 @@ const Index = () => {
   // measured results (docs/ml.md): simulated 50-cow herd over 21 days, COCO/Open Images validation
   const stats = [
     { value: "98%", label: "Fevers caught (test herd)" },
-    { value: "97.8%", label: "Right disease in top 3" },
+    { value: "60", label: "Diseases in the free checker (5 animals)" },
     { value: "0.73", label: "Cow detection mAP50" },
     { value: "8 fps", label: "Detection on the rover Pi" },
   ];
@@ -95,6 +96,10 @@ const Index = () => {
                 <Link to="/rover" className="btn-secondary">
                   View Live Feed
                   <Eye className="w-5 h-5" />
+                </Link>
+                <Link to="/disease" className="btn-secondary">
+                  Free disease checker
+                  <Stethoscope className="w-5 h-5" />
                 </Link>
               </div>
             </div>

@@ -1,4 +1,4 @@
-"""Herd, alerts, environment and disease endpoints."""
+"""Herd, alerts and environment endpoints (the disease checker is public: backend/api/public.py)."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field
 from backend.api import db
 from backend.api.auth import require_user
 from common.schemas import dew_point
-from ml.disease import predict as disease
 
 router = APIRouter(prefix="/api", tags=["herd"], dependencies=[Depends(require_user)])
 OFFLINE_AFTER = "10 minutes"
@@ -241,17 +240,3 @@ def station_events(
            ORDER BY ts DESC LIMIT %s""",
         (hours * 3600, station_id, station_id, limit),
     )
-
-
-class Symptoms(BaseModel):
-    symptoms: list[str] = Field(min_length=1, max_length=40)
-
-
-@router.get("/disease/symptoms")
-def disease_symptoms() -> dict:
-    return {"symptoms": disease.symptoms(), "model": disease.model_info()}
-
-
-@router.post("/disease/predict")
-def disease_predict(body: Symptoms) -> dict:
-    return disease.predict(body.symptoms)

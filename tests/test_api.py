@@ -55,7 +55,7 @@ def test_login_rejects_wrong_password(client):
 
 
 def test_protected_routes_need_a_token(client):
-    for path in ("/api/animals", "/api/alerts", "/api/summary", "/api/rover/status", "/api/disease/symptoms"):
+    for path in ("/api/animals", "/api/alerts", "/api/summary", "/api/rover/status"):
         assert client.get(path).status_code == 401, path
     assert client.get("/api/animals", headers={"Authorization": "Bearer junk"}).status_code == 401
 
@@ -65,18 +65,15 @@ def test_token_in_query_works_for_streams(client):
     assert client.get(f"/api/auth/me?token={token}").json() == {"user": "admin"}
 
 
-@pytest.mark.skipif(
-    not (pytest.importorskip("ml.disease.predict").ARTIFACTS / "disease_model.joblib").exists(),
-    reason="disease model not trained",
-)
-def test_disease_predict(client):
-    h = login(client)
-    syms = client.get("/api/disease/symptoms", headers=h).json()
-    assert "fever" in syms["symptoms"]
-    r = client.post(
-        "/api/disease/predict", headers=h, json={"symptoms": ["udder_swelling", "udder_heat", "milk_clots"]}
-    )
-    assert r.json()["predictions"][0]["disease"] == "mastitis"
+def test_public_disease_checker_needs_no_login(client):
+    kb = client.get("/api/public/disease/kb", params={"species": "cow"}).json()
+    ids = {s["id"] for s in kb["symptoms"]}
+    assert {"swollen_udder", "abnormal_milk", "fever"} <= ids and "vomiting" not in ids
+    assert set(kb["symptoms"][0]["short"]) == {"en", "hi", "hl"}
+    url = "/api/public/disease/predict"
+    r = client.post(url, json={"species": "cow", "symptoms": ["swollen_udder", "abnormal_milk"]})
+    assert r.json()["results"][0]["id"] == "mastitis"
+    assert client.post(url, json={"species": "lion", "symptoms": ["fever"]}).status_code == 400
 
 
 def test_rover_proxy_sends_token_and_hides_rover_401(client, monkeypatch):

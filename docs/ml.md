@@ -130,3 +130,14 @@ A friend's Pi script used **MobileNet-SSD** (chuanqi305, Caffe, Pascal VOC, 300 
 Decision: keep YOLO11n. The SSD is ~1.3–1.6× faster but misses about 4 in 10 near people and gets half the AP on all objects; its Caffe format is also gone from OpenCV 5. Nothing from it was reused except the observation that a smaller input is faster (256 px costs too much person recall).
 
 Quick wins done: the rover keeps more COCO classes (person, bird, cat, dog, horse, sheep, cow; follows cow/sheep/horse only); detectors take an input size (`yolo:PATH@416`, `ncnn:FOLDER@416`); COCO YOLO11n is exported at 416 px as ONNX and NCNN (`coco_yolo11n_416*`, NCNN output checked identical to ONNX on 40 images). Next: `python -m ml.detection.bench_pi` on the Pi 4 to pick between ONNX 320 (121 ms measured) and NCNN 320/416.
+
+## 6. Free animal disease checker (2026-10-24)
+
+A public page, **/disease**, needs no login: for owners who don't use the rest of LMS. Pick the animal (cow/buffalo, goat, sheep, dog, cat), tick signs, get the likely diseases with urgency, whether they spread (to animals / to people), what to do now and prevention, in **English, Hindi and Hinglish**. Every sign has a one-line explanation and a **"!"** that shows a detailed one on hover (tap on a phone).
+
+- Knowledge base `ml/disease/kb/`: 60 diseases, 71 signs, each sign of a disease marked hallmark / common / occasional, written from standard veterinary references for Indian conditions. It gives no drug doses; every action points to a vet. Validated on load (`python -m ml.disease.kb`).
+- Model `ml/disease/kb.py`: naive Bayes over the ticked signs (unticked = unknown), P = 0.9 / 0.6 / 0.3, leak 0.02, prior = prevalence. Returns the top 5, matched signs, signs to check next, and an emergency flag.
+- Self-check (2–3 signs drawn as they show up): right disease first 75–80 %, in the top 3 98–100 % for every species. This shows the diseases are told apart by the knowledge base; it is not a field accuracy. Tests: `tests/test_disease_kb.py` (every disease's hallmark+common signs put it in the top 3).
+- API: `GET /api/public/disease/kb?species=`, `POST /api/public/disease/predict` (no auth, nothing stored).
+
+The old hackathon model (section 2, cattle only, 26 diseases) is kept for reference but no longer served.

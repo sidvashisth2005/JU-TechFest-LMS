@@ -31,7 +31,8 @@ function Shell() {
         <Route path="/alerts" element={<Protected><Alerts /></Protected>} />
         <Route path="/environment" element={<Protected><Environment /></Protected>} />
         <Route path="/rover" element={<Protected><Rover /></Protected>} />
-        <Route path="/disease" element={<Protected><Disease /></Protected>} />
+        {/* free for everyone: no login */}
+        <Route path="/disease" element={<Disease />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>

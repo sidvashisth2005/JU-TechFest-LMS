@@ -14,7 +14,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from backend.api import auth, db, routes, rover
+from backend.api import auth, db, public, routes, rover
 from backend.config import CHANNEL_LIVE, ROOT, settings
 
 log = logging.getLogger("api")
@@ -55,6 +55,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(routes.router)
 app.include_router(rover.router)
+app.include_router(public.router)
 
 
 @app.get("/api/health")
