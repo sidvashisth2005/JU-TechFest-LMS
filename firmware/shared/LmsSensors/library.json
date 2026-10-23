@@ -1,0 +1,7 @@
+{
+  "name": "LmsSensors",
+  "version": "1.0.0",
+  "description": "Shared sensor helpers for the LMS collar firmware: MPU6050-family accelerometer, activity/steps, analog pulse beat detector",
+  "frameworks": "arduino",
+  "platforms": "*"
+}

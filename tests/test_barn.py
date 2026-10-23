@@ -26,3 +26,21 @@ def test_sensehat_cpu_heat_correction():
     assert corrected_air_temp(34.0, 52.0, 1.5) == 22.0
     assert corrected_air_temp(30.0, None, 1.5) == 30.0
     assert band_colour(70) == (0, 120, 0) and band_colour(90) == (200, 0, 0)
+
+
+def test_esp32_collar_line_with_nulls_and_rssi():
+    line = (
+        '{"animal_id":"C002","hr":64,"spo2":null,"body_temp":38.71,"activity":0.0312,'
+        '"steps":2,"battery":null,"rssi":-58}'
+    )
+    m = parse_line(line, None)
+    assert m.animal_id == "C002" and m.hr == 64 and m.spo2 is None and m.battery is None and m.rssi == -58
+
+
+def test_esp32_debug_lines_are_skipped():
+    for line in ("wifi: connected, ip 10.0.0.5, rssi -60 dBm", "pulse:51234 g:1.002", "ok: ssid = Hotspot"):
+        assert parse_line(line, "C001") is None
+
+
+def test_uno_status_line_is_skipped():
+    assert parse_line('{"status":"ready","ppg":"max30100","ppg_ok":true,"imu":true,"imu_id":104}', None) is None

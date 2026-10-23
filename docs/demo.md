@@ -18,6 +18,7 @@ collar / UNO / Sense HAT ──MQTT──►  LAPTOP  ◄──HTTP── rover 
 - [ ] Pi: `bash infra/pi/deploy.sh`, then `lms-pi.sh status`.
 - [ ] Drive test with the tracks lifted. `ROVER_TURN_SIGN` and `ROVER_DRIVE_SIGN` must already be calibrated.
 - [ ] Note the Pi IP at the venue Wi-Fi/hotspot. If it changed, update `ROVER_URL` in the laptop `.env` and `MQTT_HOST` in the Pi `.env`.
+- [ ] Collar: follow docs/collar.md. Hotspot on 2.4 GHz, `scan` shows PPG + MPU6050, the USB backup (`-Collar auto`) tried once, and the UNO pre-flashed with the env for your PPG board.
 - [ ] Record a 60 s backup video of the rover following a cow toy and of the dashboard live (in case anything fails on stage).
 
 ## Start (about 2 minutes before you present)
@@ -53,7 +54,7 @@ Open the public link on your phone and log in once to check it.
 | Public link does not open | Use `http://localhost:8000` on the laptop screen. `.\infra\tunnel.ps1` makes a new link (the URL changes). |
 | Rover page shows "rover unreachable" | Check the Pi IP (`hostname -I` on the Pi) and fix `ROVER_URL` in `.env`. The API reads `.env` at start, so stop and rerun run_all. Last resort: `-MockRover` and play the backup video. |
 | Rover page says "rover rejected ROVER_TOKEN" | The token in the Pi `~/lms-rover/.env` differs from the laptop `.env`. Copy it, then `lms-pi.sh restart rover`. |
-| Real collar shows nothing | Is `lms-uno-bridge` running (`lms-pi.sh logs uno`)? Is port 1883 allowed in the laptop firewall? Is the finger fully on the sensor? (HR stays null without contact.) |
+| Real collar shows nothing | Open the serial monitor. `mqtt ... rc=-2` means wrong IP or port 1883 is blocked in the laptop firewall. Fastest fix: USB cable + `.\infra\run_all.ps1 -Collar auto`. Still nothing? Use the UNO backup (docs/collar.md). HR stays null without good finger contact. |
 | Rover turns the wrong way | Set `ROVER_TURN_SIGN=-1` in the Pi `.env`, then `lms-pi.sh restart rover`. |
 | Rover camera black or frozen | `lms-pi.sh restart rover`. The Pixy resets if the servos jump, so do not move the pan-tilt during the demo. |
 | Dashboard empty after a restart | The simulator backfills 48 h. Wait about a minute, or check `logs\simulator.log`. |

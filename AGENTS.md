@@ -32,7 +32,8 @@ LMS = Livestock Monitoring System. Includes a rover (Raspberry Pi 4B + BrickPi3 
 .venv\Scripts\ruff check . ; .venv\Scripts\ruff format --check .
 .venv\Scripts\python -m pytest -q                       # ~45 tests; DB tests skip if services are down
 $env:LMS_E2E=1; .venv\Scripts\python -m pytest tests\test_e2e.py -v   # needs run_all.ps1 running
-cd firmware\collar_esp32; pio run -e wifi -e wifi_sleep -e espnow       # firmware compile check
+cd firmware\collar_esp32; ..\..\.venv\Scripts\pio run   # all 5 collar envs; also firmware\uno_bridge (4 envs), firmware\gateway_espnow
+# pio lives in .venv; set PLATFORMIO_CORE_DIR=D:\DevCache\platformio if the shell doesn't have it
 ```
 CI (`.github/workflows/ci.yml`) runs ruff, pytest (after `python -m ml.disease.train`), and `npm run build`.
 
@@ -67,8 +68,8 @@ CI (`.github/workflows/ci.yml`) runs ruff, pytest (after `python -m ml.disease.t
 | `ml/disease/` | Symptom → disease (BernoulliNB). `python -m ml.disease.train` writes `artifacts/`. |
 | `ml/detection/` | YOLO11n cow fine-tune pipeline (WSL GPU), models in `models/` (`coco_yolo11n.onnx` is used by the rover; `cow.onnx`; NCNN folders). |
 | `rover/` | Pi rover server: `drivers/` (BrickPi + mock), `drivers/camera.py` (picamera2/pixy2/webcam/video/synthetic), `vision.py` (green/YOLO ONNX/NCNN + IoU tracker), `controller.py` (PD follow), `safety.py`, `server.py`. |
-| `barn/` | Pi publishers: `sensehat_pub.py`, `serial_bridge.py` (UNO or ESP-NOW gateway serial → MQTT). |
-| `firmware/` | PlatformIO: `collar_esp32` (modes wifi / wifi_sleep / espnow), `gateway_espnow`, `uno_bridge`. |
+| `barn/` | Pi publishers: `sensehat_pub.py`, `serial_bridge.py` (any collar/gateway on USB serial → MQTT, `--port auto`; also runs on the laptop via `run_all.ps1 -Collar auto`). |
+| `firmware/` | PlatformIO: `collar_esp32` (main collar; envs wifi / wifi_sleep / espnow / wifi_c3 / espnow_c3; PPG auto-detect MAX30102/MAX30100/DFRobot + analog; settings over serial stored in NVS), `uno_bridge` (backup over USB; envs uno / uno_max30100 / uno_dfrobot / uno_analog), `gateway_espnow`, `shared/LmsSensors` (MPU6050-family reader, activity/steps, analog beat detector). Day-of guide: `docs/collar.md`. |
 | `infra/` | WSL install/setup scripts, `schema.sql`, `mosquitto.conf`, `run_all/stop_all/tunnel.ps1`, `pi/` (systemd units, `lms-pi.sh`, `deploy.sh`). |
 | `pi-tools/` | Pixy2 MJPEG stream + pan-tilt page (camera test tool). |
 | `web/` | React + Vite + Tailwind dashboard. |
@@ -87,7 +88,7 @@ Hardware, when the user has the parts:
 1. Connect the motors and lift the tracks. Drive from the dashboard and calibrate the turn/drive sign.
 2. Run follow mode with YOLO, and benchmark ONNX vs NCNN on the Pi.
 3. Sense HAT test (BrickPi covers the GPIO header, so it needs a splitter or a second Pi), then the `sensehat` service.
-4. Ask which MAX30102 board it is, flash the UNO sketch, and run the `uno` service, so live collar data shows on the dashboard.
+4. Collar: the ESP32 and pulse sensor arrive on the hackathon day. Follow `docs/collar.md`: flash `wifi`, `scan`, then set ssid/pass/mqtt over serial. Backups are USB + `run_all.ps1 -Collar auto`, then the UNO with the env matching the PPG board. None of the collar firmware has run on real hardware yet (compile-only).
 5. ESP32 collar and gateway flashing, then reassembly.
 
 User-side:

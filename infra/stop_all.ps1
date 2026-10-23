@@ -1,6 +1,6 @@
 # Stop everything started by run_all.ps1, then the WSL services.
 # supervisors first (so they do not restart the children), then the children
-$patterns = "backend\.supervise|backend\.workers\.|backend\.api\.main|simulator\.run|rover\.server"
+$patterns = "backend\.supervise|backend\.workers\.|backend\.api\.main|simulator\.run|rover\.server|barn\.serial_bridge"
 Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
     Where-Object { $_.CommandLine -match $patterns } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; Write-Host "stopped $($_.ProcessId)" }

@@ -25,7 +25,7 @@ Example: gaay C017 ka temperature herd se 1°C zyada hai aur 20 minute se zyada 
 | **MAX30102** | Ungli/skin pe laal + infrared roshni daalkar naapta hai | Heart rate (BPM) aur SpO₂ (khoon mein oxygen %). |
 | **MPU6050** | Accelerometer (hilna-dulna naapta hai) | Activity aur steps. |
 | **DS18B20** | Waterproof temperature probe | Body temperature (sirf ESP32 collar mein). |
-| **Arduino UNO** | Microcontroller (chhota chip computer) | Prototype collar: sensors padhkar JSON USB pe bhejta hai. |
+| **Arduino UNO** | Microcontroller (chhota chip computer) | **Backup** collar: sensors padhkar JSON USB cable pe bhejta hai (radio nahi hai). |
 | **ESP32** | Wi-Fi + Bluetooth wala microcontroller | Final collar: khud Wi-Fi/ESP-NOW se data bhejta hai, aur sone (deep sleep) se battery bachata hai. |
 | **Laptop** | Server | Database, data pipeline, AI, website: sab yahin chalta hai (demo ke liye). |
 
@@ -166,17 +166,18 @@ Rover ka apna web server (`rover/server.py`, port 8080) video stream, status aur
 | File | Chalao (Pi pe) | Kaam |
 |---|---|---|
 | `sensehat_pub.py` | `python -m barn.sensehat_pub --station barn1` | Sense HAT → MQTT |
-| `serial_bridge.py` | `python -m barn.serial_bridge --port /dev/ttyACM0 --animal C001` | UNO/gateway ki USB JSON lines → MQTT |
+| `serial_bridge.py` | `python -m barn.serial_bridge --port auto` (laptop: `run_all.ps1 -Collar auto`) | USB pe laga koi bhi collar/gateway → MQTT. `auto` khud board dhoondhta hai |
 | `mqtt.py` | — | Dono ke liye MQTT connection (`.env` se host/password) |
 
 ### `firmware/` (chips ke liye C++ code, PlatformIO se)
 | Folder | Kaam | Flash kaise |
 |---|---|---|
-| `collar_esp32/` | ESP32 collar. 3 modes: `wifi` (hamesha on), `wifi_sleep`, `espnow` (battery bachao) | `pio run -e wifi -t upload` |
+| `collar_esp32/` | **Main** ESP32 collar. 4 PPG boards chala leta hai (MAX30102/MAX30100/DFRobot khud pehchaanta hai, analog `ppg analog` se). Wi-Fi/MQTT serial se set hota hai, reflash nahi. Modes: `wifi`, `wifi_sleep`, `espnow` (+ C3 boards) | `pio run -e wifi -t upload` |
 | `gateway_espnow/` | ESP32 jo collars ke ESP-NOW radio messages sunke USB pe JSON deta hai | `pio run -t upload` |
-| `uno_bridge/` | UNO prototype: MAX30102 + MPU6050 → JSON | `pio run -t upload` |
+| `uno_bridge/` | **Backup** UNO collar, har PPG board ka alag env | `pio run -e uno` / `uno_max30100` / `uno_dfrobot` / `uno_analog` |
+| `shared/LmsSensors/` | Dono collars ka common code: MPU6050 reader, activity/steps, analog pulse beat detector | — |
 
-Secret settings (Wi-Fi password, MQTT) `include/lms_config.h` mein jaati hain. Ye file git mein nahi jaati; template `lms_config.example.h` hai.
+ESP32 ki settings (Wi-Fi, MQTT, animal id) serial monitor se set hoti hain (`help` type karo) aur ESP32 ki flash mein save rehti hain. Chaho to defaults `include/lms_config.h` mein bhi daal sakte ho (ye file git mein nahi jaati). Hackathon day ka poora tareeka: `docs/collar.md`.
 
 ### `infra/` (sab chalane-band karne ke scripts)
 | File | Kahan chalao | Kya hoga |
@@ -288,7 +289,7 @@ Rover hardware nahi hai? `-MockRover` lagao. Laptop pe nakli rover aur nakli cam
 1. Motors ko rover server se chalana (tracks utha ke). Dashboard se drive karke `ROVER_TURN_SIGN`/`ROVER_DRIVE_SIGN` set karna.
 2. Follow mode: gaay ka khilona/photo rakh ke test. Pi pe ONNX vs NCNN speed naapna.
 3. Sense HAT test (doosra Pi ya splitter), phir `sensehat` service.
-4. MAX30102 board kaun sa hai ye check karna. UNO flash karke `uno` service chalana, taaki asli collar data dashboard pe aaye.
+4. Hackathon day: ESP32 + PPG aayenge → `docs/collar.md` follow karna (flash → `scan` → Wi-Fi set). Backup: USB cable, phir UNO.
 5. ESP32 collar + gateway flash karna, battery life naapna.
 6. Rover reassemble karna aur poora follow test.
 

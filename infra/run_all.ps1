@@ -3,8 +3,10 @@
 #   .\infra\run_all.ps1 -Simulator      ...plus the 50-cow simulator (48 h backfill + demo events)
 #   .\infra\run_all.ps1 -MockRover      ...plus a laptop rover (mock motors, synthetic camera)
 #   .\infra\run_all.ps1 -Tunnel         ...plus a public https link via Cloudflare quick tunnel
+#   .\infra\run_all.ps1 -Collar auto    ...plus a collar on this laptop's USB (UNO backup, or an ESP32
+#                                       without Wi-Fi); -Collar COM5 for a fixed port
 # Stop everything with .\infra\stop_all.ps1. Logs go to logs\*.log.
-param([switch]$Simulator, [switch]$MockRover, [switch]$Tunnel)
+param([switch]$Simulator, [switch]$MockRover, [switch]$Tunnel, [string]$Collar = "")
 
 $Root = Split-Path -Parent $PSScriptRoot
 $Py = Join-Path $Root ".venv\Scripts\python.exe"
@@ -34,6 +36,9 @@ if ($Simulator) {
 }
 if ($MockRover) {
     Start-Part "rover" @("-m", "rover.server", "--mock", "--camera", "synthetic", "--port", "8080", "--mqtt", "127.0.0.1")
+}
+if ($Collar) {
+    Start-Part "collar" @("-m", "barn.serial_bridge", "--port", $Collar)
 }
 if ($Tunnel) {
     & (Join-Path $PSScriptRoot "tunnel.ps1")

@@ -54,7 +54,7 @@ ssh pi@<pi-ip> "~/lms-rover/infra/pi/lms-pi.sh enable all"       # start at ever
 |---|---|---|
 | `lms-rover` | `rover.server` on :8080 (camera, detector, motors, ultrasonic, safety) | `ROVER_CAMERA`, `ROVER_DETECTOR`, `ROVER_TOKEN`, `ROVER_TURN_SIGN`, `ROVER_DRIVE_SIGN` |
 | `lms-sensehat` | `barn.sensehat_pub` (temperature, humidity, pressure → MQTT) | `BARN_STATION`, `BARN_INTERVAL` |
-| `lms-uno-bridge` | `barn.serial_bridge` (UNO or ESP-NOW gateway USB serial → MQTT) | `UNO_PORT`, `UNO_ANIMAL` |
+| `lms-uno-bridge` | `barn.serial_bridge` (collar or ESP-NOW gateway on USB serial → MQTT; `UNO_PORT=auto` finds the board) | `UNO_PORT`, `UNO_ANIMAL` |
 | `lms-pixy-stream` | `pi-tools/pixy_stream.py` on :8000 (camera test page; cannot run with the rover) | — |
 
 The laptop's `.env` needs `ROVER_URL=http://<pi-ip>:8080` and the same `ROVER_TOKEN` as the Pi. For the Pi and the collars to reach the laptop's MQTT broker, allow inbound TCP 1883 in Windows Firewall, and in the Hyper-V firewall for WSL (admin PowerShell):
@@ -70,12 +70,16 @@ YOLO on the Pi: `ROVER_DETECTOR=yolo:ml/detection/models/coco_yolo11n.onnx` (Ope
 
 ## 6. Collars
 
-- **ESP32 collar** (`firmware/collar_esp32`). Copy `include/lms_config.example.h` to `include/lms_config.h` and fill in the Wi-Fi, MQTT and animal id. Then pick a mode:
-  - `pio run -e wifi -t upload`: always on, reading every 5 s. Best for demos.
-  - `pio run -e wifi_sleep -t upload`: wakes every 60 s, measures 6 s, sends over Wi-Fi, then deep sleeps.
-  - `pio run -e espnow -t upload`: same as `wifi_sleep`, but sends over ESP-NOW to the gateway. Longest battery life and no router needed.
-- **ESP-NOW gateway** (`firmware/gateway_espnow`, any ESP32 on the Pi's USB): `pio run -t upload`. Then on the Pi set `UNO_PORT=/dev/ttyUSB0` and start the `uno` service; it forwards every collar.
-- **UNO prototype** (`firmware/uno_bridge`): `pio run -t upload`, plug it into the Pi, and start the `uno` service (`UNO_PORT=/dev/ttyACM0`).
+Step-by-step for the hackathon day (wiring, flashing, serial setup, backups): **[docs/collar.md](collar.md)**.
+
+- **ESP32 collar** (`firmware/collar_esp32`, main). It works with any of 4 pulse sensors: MAX30102, MAX30100 and DFRobot SEN0344 are auto-detected on I2C, and an analog pulse sensor is set with `ppg analog`. Any MPU6050-family accelerometer works, plus an optional DS18B20. Flash with `pio run -e wifi -t upload`, then set Wi-Fi, MQTT and the animal id over serial (`pio device monitor`, type `help`). No reflash is needed when the network changes. Modes:
+  - `wifi` / `wifi_c3`: always on, a reading every 5 s. Use this for demos.
+  - `wifi_sleep`: wakes every 60 s, measures for 6 s, sends over Wi-Fi, then deep sleeps.
+  - `espnow` / `espnow_c3`: same as `wifi_sleep`, but sends over ESP-NOW to the gateway. Longest battery life and no router needed.
+
+  Every reading is also printed on USB serial, so a collar on a cable works without Wi-Fi.
+- **ESP-NOW gateway** (`firmware/gateway_espnow`, any ESP32 on the Pi's USB): `pio run -t upload`. Then start the `uno` service on the Pi; it forwards every collar.
+- **UNO backup** (`firmware/uno_bridge`): one env per pulse sensor, `uno` / `uno_max30100` / `uno_dfrobot` / `uno_analog`. Plug it into the laptop and run `.\infra\run_all.ps1 -Collar auto`, or plug it into the Pi and use the `uno` service.
 - **Sense HAT barn station**: the `sensehat` service (`python -m barn.sensehat_pub --station barn1`).
 
 ## 7. Tests
