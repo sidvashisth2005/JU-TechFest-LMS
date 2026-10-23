@@ -34,7 +34,7 @@ def main():
     ap.add_argument("--left", default="D")
     ap.add_argument("--right", default="C")
     ap.add_argument("--drive-sign", type=int, choices=[-1, 1], default=1, help="-1 if forward drives backwards")
-    ap.add_argument("--stop-cm", type=float, default=25)
+    ap.add_argument("--stop-cm", type=float, default=20)
     ap.add_argument("--safety", action="store_true", help="only drive forward for 5 s to test the obstacle stop")
     ap.add_argument("--no-ultrasonic", action="store_true", help="motors only, no obstacle stop (tracks lifted)")
     args = ap.parse_args()

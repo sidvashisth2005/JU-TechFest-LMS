@@ -194,7 +194,7 @@ Padhne ka tarika: upar se neeche order mein padho — har part pichhle pe based 
 - **PD controller:** Target frame ke beech se kitna hata hai (error) → utna mudo (**P** = proportional), aur error kitni tezi se badal raha (**D** = derivative, jhatke kam). Purane code ke KP 0.32, KD 0.18 reuse kiye.
 - **Doori:** Box ki height frame ka kitna hissa → paas/door. Bahut paas = peeche, theek = ruko, door = aage.
 - **IoU tracker:** Har frame mein boxes ko pichhle frame ke boxes se overlap (IoU) se milake same ID — rover ek hi gaay ke peeche rahe.
-- **Safety layer** (`rover/safety.py`) — har motor command ka aakhri check: obstacle <25 cm, insaan paas (box >35% frame), battery <9 V → aage jaana band (peeche/mudna allowed).
+- **Safety layer** (`rover/safety.py`) — har motor command ka aakhri check: obstacle <20 cm, insaan paas (box >35% frame), battery <9 V → aage jaana band (peeche/mudna allowed).
 - **Watchdog:** Manual mein 0.5 sec tak command na aaye → ruk jao (browser band ho gaya ya net gaya to rover bhaage nahi).
 - **Mock:** Har driver ka nakli version, taaki laptop pe bina hardware test ho (`--mock --camera synthetic`).
 - **Khud kaise karoge:** `python -m rover.server --mock --camera synthetic`, browser `http://localhost:8080/status`.

@@ -31,7 +31,7 @@ class RoverConfig:
     lost_after_s: float = 1.0  # stop when the target hasn't been seen for this long
 
     # safety
-    stop_distance_cm: float = 25  # block forward motion closer than this
+    stop_distance_cm: float = 20  # block forward motion closer than this (env ROVER_STOP_CM)
     close_echo_window_s: float = 1.0  # "no echo" right after a close reading means too close, not clear
     manual_timeout_s: float = 0.5  # manual drive stops if commands stop arriving (watchdog)
     battery_min_v: float = 9.0  # refuse to drive below this

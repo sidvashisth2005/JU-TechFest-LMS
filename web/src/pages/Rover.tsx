@@ -20,6 +20,7 @@ interface RoverStatus {
   targets: number;
   fps: number | null;
   mock: boolean;
+  stop_cm?: number;
 }
 
 const KEYS: Record<string, Direction> = {
@@ -214,7 +215,7 @@ export default function Rover() {
             <h2 className="mb-3 text-xl font-semibold text-forest-800">Sensors</h2>
             <dl className="grid grid-cols-2 gap-y-1 text-sm">
               <dt className="text-gray-500">Obstacle</dt>
-              <dd className={`tabular-nums ${dist != null && dist < 25 ? "font-semibold text-red-700" : ""}`}>
+              <dd className={`tabular-nums ${dist != null && dist < (status?.stop_cm ?? 20) ? "font-semibold text-red-700" : ""}`}>
                 {dist == null ? "no echo" : `${dist.toFixed(0)} cm`}
               </dd>
               <dt className="text-gray-500">Battery</dt>

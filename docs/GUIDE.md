@@ -19,7 +19,7 @@ Example: gaay C017 ka temperature herd se 1°C zyada hai aur 20 minute se zyada 
 | **Raspberry Pi 4B** | Chhota computer (Linux chalta hai) | Rover ka dimaag: camera, AI, motors. Doosra Pi barn station ban sakta hai. |
 | **BrickPi3** | Pi ke upar lagne wala board | LEGO motors aur sensors ko Pi se jodta hai. Iski apni battery (9–12 V) hai, aur Pi ko bhi wahi power deti hai. |
 | **2× LEGO EV3 motor** | Encoder wali motors (kitna ghoomi, ye bata deti hain) | Rover ke tracks. Left = PORT_D, Right = PORT_C. |
-| **EV3 ultrasonic** | Awaaz ki goonj se doori naapta hai | Aage koi cheez 25 cm se paas ho to rover ruk jaata hai. PORT_2. |
+| **EV3 ultrasonic** | Awaaz ki goonj se doori naapta hai | Aage koi cheez 20 cm se paas ho to rover ruk jaata hai. PORT_2. |
 | **Pixy2 camera** (abhi) / **Pi Camera** (final) | Camera | Video + gaay dhoondhna. Pixy2 pan-tilt servo pe laga hai. |
 | **Sense HAT** | Pi ke upar lagne wala sensor board | Barn ka temperature, humidity, pressure. |
 | **MAX30102** | Ungli/skin pe laal + infrared roshni daalkar naapta hai | Heart rate (BPM) aur SpO₂ (khoon mein oxygen %). |
@@ -100,7 +100,7 @@ Camera (Pixy2/Pi Cam) ─► rover/drivers/camera.py ─► rover/vision.py (YOL
                                                         ▼
                      rover/controller.py (PD: gaay frame ke beech mein rahe, sahi doori pe)
                                                         ▼
-         rover/safety.py (ultrasonic <25 cm? insaan bahut paas? battery <9 V? 0.5 s se command nahi?)
+         rover/safety.py (ultrasonic <20 cm? insaan bahut paas? battery <9 V? 0.5 s se command nahi?)
                                                         ▼
                          rover/drivers/brickpi.py ─► BrickPi3 ─► motors C/D
 ```
@@ -155,7 +155,7 @@ Rover ka apna web server (`rover/server.py`, port 8080) video stream, status aur
 | File | Kaam |
 |---|---|
 | `server.py` | `python -m rover.server --mock --camera synthetic` → laptop pe nakli rover. Pi pe service chalati hai. Endpoints: `/status`, `/control`, `/mode`, `/stream.mjpg`, `/snapshot.jpg`. |
-| `config.py` | Saari settings: speed, 25 cm stop, battery 9 V, turn_sign… |
+| `config.py` | Saari settings: speed, 20 cm stop (ROVER_STOP_CM), battery 9 V, turn_sign… |
 | `drivers/brickpi.py` | Asli motors/ultrasonic (BrickPi3), aur testing ke liye Mock version |
 | `drivers/camera.py` | Camera chunna: `picamera2`, `pixy2`, `webcam`, `video:file.mp4`, `synthetic` (nakli chalti gaay) |
 | `vision.py` | Detector: `green` (purana hara marker), `yolo:…onnx`, `ncnn:…folder` + tracker (har gaay ko ID) |

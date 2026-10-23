@@ -43,7 +43,7 @@ Open the public link on your phone and log in once to check it.
 | 2:40 | Alerts page + Telegram on phone | The same alert reaches the farmer's phone. Alerts clear themselves when the cow recovers. |
 | 3:10 | Barn page | Sense HAT gives temperature and humidity. THI (temperature-humidity index) shows the heat-stress level. |
 | 3:40 | Rover page (live video) | Pi + BrickPi3 + EV3 motors. YOLO11n finds cows (fine-tuned mAP50 0.73), and the rover follows a cow with a PD controller. |
-| 4:30 | Put a hand in front of the ultrasonic / walk in front | Safety: it stops below 25 cm, stops for a close person, stops on low battery, and stops after 0.5 s without commands. |
+| 4:30 | Put a hand in front of the ultrasonic / walk in front | Safety: it stops below 20 cm, stops for a close person, stops on low battery, and stops after 0.5 s without commands. |
 | 5:10 | Disease page: tick 3 symptoms | Naive Bayes over 26 diseases: right answer in the top 3 97.8% of the time with only 2–3 symptoms. It is a suggestion, so call the vet. |
 | 5:40 | Architecture slide (docs/architecture.md) | Today it runs on a laptop. The real deployment moves the same code to a cloud server plus one gateway Pi per farm (docs/deployment.md). |
 

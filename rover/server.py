@@ -187,6 +187,7 @@ class Rover:
             "loop_hz": round(self.loop_fps, 1),
             "vision_fps": round(self.vision_fps, 1),
             "mock": self.mock,
+            "stop_cm": self.cfg.stop_distance_cm,
         }
 
     def _publish_status(self, now: float) -> None:
@@ -329,11 +330,14 @@ def main():
     ap.add_argument("--mqtt", default=os.environ.get("ROVER_MQTT_HOST"), help="broker host for status/detections")
     ap.add_argument("--turn-sign", type=int, choices=[-1, 1], default=int(os.environ.get("ROVER_TURN_SIGN", 1)))
     ap.add_argument("--drive-sign", type=int, choices=[-1, 1], default=int(os.environ.get("ROVER_DRIVE_SIGN", 1)))
+    ap.add_argument(
+        "--stop-cm", type=float, default=float(os.environ.get("ROVER_STOP_CM", 20)), help="obstacle stop distance"
+    )
     ap.add_argument("--token", default=os.environ.get("ROVER_TOKEN"), help="shared secret (env ROVER_TOKEN)")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
-    cfg = RoverConfig(turn_sign=args.turn_sign, drive_sign=args.drive_sign)
+    cfg = RoverConfig(turn_sign=args.turn_sign, drive_sign=args.drive_sign, stop_distance_cm=args.stop_cm)
     client = mqtt_connect(args.mqtt) if args.mqtt else None
     rover = Rover(cfg, args.camera, args.detector, args.mock, client)
     log.info(

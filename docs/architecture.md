@@ -38,4 +38,4 @@
 
 ## Rover (rover/)
 
-Control loop at 15 Hz: camera frame → detector (green marker or YOLO cow model) → IoU tracker → controller (manual with 0.5 s watchdog, or PD follow) → safety filter (obstacle < 25 cm blocks forward motion; "no echo" right after a close reading counts as blocked; battery < 9 V stops) → BrickPi3 motors. Every part has a mock so the full loop runs on a laptop.
+Control loop at 15 Hz: camera frame → detector (green marker or YOLO cow model) → IoU tracker → controller (manual with 0.5 s watchdog, or PD follow) → safety filter (obstacle < 20 cm (ROVER_STOP_CM) blocks forward motion; "no echo" right after a close reading counts as blocked; battery < 9 V stops) → BrickPi3 motors. Every part has a mock so the full loop runs on a laptop.
