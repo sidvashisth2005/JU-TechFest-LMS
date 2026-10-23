@@ -14,6 +14,7 @@ On start it replays the last 48 h from the database to rebuild baselines (no ale
 import argparse
 import json
 import logging
+import os
 import signal
 import time
 from collections import defaultdict
@@ -25,6 +26,7 @@ import redis
 from backend.config import CHANNEL_ALERTS, CHANNEL_LIVE, STREAM_GROUP, STREAM_IN, settings
 from common.schemas import AlertMsg, DetectionsMsg, EnvMsg, RoverStatusMsg, VitalsMsg, thi
 from ml.anomaly.detector import Detector
+from ml.anomaly.multivariate import load_scorer
 
 log = logging.getLogger("processor")
 BATCH = 1000
@@ -42,7 +44,11 @@ class Processor:
         self.name = name
         self.r = redis.from_url(settings.redis_url)
         self.db = self._connect()
-        self.detector = Detector()
+        # Layer 3 (IsolationForest) is opt-in: on simulated herds it found nothing the rules missed
+        # and added ~4 false info alerts per 100 cow-days (ml/anomaly/models/iforest_report.json)
+        scorer = load_scorer() if os.environ.get("LMS_IFOREST") == "1" else None
+        self.detector = Detector(scorer=scorer)
+        log.info("multivariate model %s", "on" if scorer else "off (set LMS_IFOREST=1 to enable)")
         self.stop = False
         try:
             self.r.xgroup_create(STREAM_IN, STREAM_GROUP, id="0", mkstream=True)

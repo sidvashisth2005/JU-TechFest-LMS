@@ -81,3 +81,23 @@ def test_heat_stress_escalates_and_clears():
     assert env(T0 + 180, 21, 50) == []  # clears silently
     again = env(T0 + 240, 36, 70)  # THI ~92 -> severe
     assert again[0].severity == "critical"
+
+
+class _AlwaysOdd:
+    """Stand-in for the IsolationForest scorer: calls one cow unusual."""
+
+    def judge(self, rows):
+        return [(i == 0, -0.9 if i == 0 else -0.4) for i in range(len(rows))]
+
+
+def test_multivariate_layer_needs_consecutive_unusual_scores():
+    det = Detector(scorer=_AlwaysOdd())
+    det.feature_rows = lambda ref: [("C000", [0.4, 9.0, 0.7, 0.8]), ("C001", [0.0, 0.0, 1.0, 1.0])]
+    alerts = []
+    for k in range(4):
+        start = T0 + k * 15 * MIN
+        feed_herd(det, start, 15)  # the herd keeps reporting; tick() only rescores on new data
+        alerts += det.tick(start + 15 * MIN)
+    odd = [a for a in alerts if a.kind == "unusual_pattern"]
+    assert len(odd) == 1  # third unusual score in a row; not repeated while open
+    assert odd[0].animal_id == "C000" and odd[0].source == "model" and odd[0].severity == "info"

@@ -1,0 +1,54 @@
+{
+  "eval_mild": {
+    "model_alerts": 120,
+    "explained_by_event": 82,
+    "precision": 0.683,
+    "false_per_100_cow_days": 4.0,
+    "events": {
+      "fever": {
+        "events": 41,
+        "model_alerted": 37,
+        "missed_by_rules_caught_by_model": 0,
+        "model_before_rules": 1
+      },
+      "lameness": {
+        "events": 19,
+        "model_alerted": 17,
+        "missed_by_rules_caught_by_model": 0,
+        "model_before_rules": 1
+      },
+      "estrus": {
+        "events": 64,
+        "model_alerted": 3,
+        "missed_by_rules_caught_by_model": 0,
+        "model_before_rules": 0
+      }
+    }
+  },
+  "eval_hot": {
+    "model_alerts": 124,
+    "explained_by_event": 86,
+    "precision": 0.694,
+    "false_per_100_cow_days": 4.0,
+    "events": {
+      "fever": {
+        "events": 41,
+        "model_alerted": 38,
+        "missed_by_rules_caught_by_model": 0,
+        "model_before_rules": 1
+      },
+      "lameness": {
+        "events": 19,
+        "model_alerted": 18,
+        "missed_by_rules_caught_by_model": 0,
+        "model_before_rules": 2
+      },
+      "estrus": {
+        "events": 64,
+        "model_alerted": 3,
+        "missed_by_rules_caught_by_model": 0,
+        "model_before_rules": 0
+      }
+    }
+  }
+}

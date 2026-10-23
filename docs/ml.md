@@ -48,6 +48,22 @@ python -m simulator.run offline --days 21 --event-rate 4 --climate mild --seed 1
 python -m ml.anomaly.evaluate simulator/out/eval_mild
 ```
 
+**Layer 3: IsolationForest (`ml/anomaly/multivariate.py`), tested and left off.** An IsolationForest (200 trees) learns what healthy cows look like from four herd-relative features: temperature vs herd, HR vs herd, 6 h activity vs normal, and 2 h activity vs normal. It was trained on 54,805 healthy 15-minute snapshots of a different simulated herd (seed 7, labelled events removed). The threshold flags 0.2% of healthy rows, and an alert needs 3 unusual scores in a row.
+
+| On the eval herds (seed 11) | Mild | Hot |
+|---|---|---|
+| "unusual_pattern" alerts | 120 | 124 |
+| Explained by a real event | 0.68 | 0.69 |
+| Extra false alerts per 100 cow-days | 4.0 | 4.0 |
+| Events the rules missed but the model caught | 0 | 0 |
+| Events the model flagged before the rules | 2 | 3 |
+
+It finds the same sick cows as the rules, a little later, plus extra false alerts, so the processor runs it only with `LMS_IFOREST=1`. That is probably a limit of the simulator: each simulated illness moves one or two signals strongly, which the rules already catch. Real collar data, where early illness shows up as small changes in several signals at once, is where this layer could earn its place. Re-test it then. Report: `ml/anomaly/models/iforest_report.json`.
+```
+python -m ml.anomaly.multivariate train simulator/out/run1
+python -m ml.anomaly.multivariate eval simulator/out/eval_mild simulator/out/eval_hot
+```
+
 ## 3. Cow detection for the rover (`ml/detection/`)
 
 The hackathon rover followed a green marker and the web app used a Roboflow *person* model. The rebuild fine-tunes YOLO11n for cows:

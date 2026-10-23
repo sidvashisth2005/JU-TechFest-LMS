@@ -11,6 +11,9 @@ How it decides:
    of day (cows are far more active at feeding time than at night).
 4. Persistence - a condition must hold for a while before it alerts, and an alert for the
    same animal and kind is not repeated until it clears and a cooldown passes.
+5. Optional multivariate model (ml/anomaly/multivariate.py) - an IsolationForest trained on
+   healthy herd-relative readings flags combinations no single rule covers ("unusual_pattern",
+   info level). Pass `scorer=` to enable it; tick() scores the whole herd in one batch.
 """
 
 import statistics
@@ -52,6 +55,9 @@ class Config:
     offline_after: float = 10 * MIN
     battery_low: float = 3.5
     cooldown: float = 6 * HOUR
+    # multivariate model (only used when a scorer is given)
+    model_every: float = 15 * MIN  # score the herd this often
+    model_hold_n: int = 3  # consecutive unusual scores before an alert
 
 
 class _Window:
@@ -97,11 +103,14 @@ class _Animal:
     baseline_n: dict = field(default_factory=dict)  # hour -> times learned
     ratio_long: float | None = None  # latest activity/normal ratios, shared for herd comparison
     ratio_short: float | None = None
+    model_bad: int = 0  # consecutive unusual multivariate scores
 
 
 class Detector:
-    def __init__(self, config: Config | None = None):
+    def __init__(self, config: Config | None = None, scorer=None):
         self.cfg = config or Config()
+        self.scorer = scorer  # ml.anomaly.multivariate.Scorer or None
+        self._model_at = -1e18
         self.animals: dict[str, _Animal] = {}
         self.open: dict[tuple[str, str], float] = {}  # (subject, kind) -> ts raised
         self.closed: dict[tuple[str, str], float] = {}  # (subject, kind) -> ts cleared
@@ -210,6 +219,55 @@ class Detector:
                 mins = (ref - a.last_seen) / MIN
                 out += self._raise(
                     animal_id, "sensor_offline", "warning", now, f"No data from collar for {mins:.0f} min"
+                )
+        if self.scorer is not None and ref - self._model_at >= self.cfg.model_every:
+            self._model_at = ref
+            out += self._check_model(ref)
+        return out
+
+    def feature_rows(self, ref: float) -> list[tuple[str, list[float]]]:
+        """Herd-relative features of every animal heard from in the last 15 min.
+
+        (temp - herd temp, HR - herd HR, 6 h activity vs normal / herd, 2 h activity vs normal / herd)
+        Relative values keep heat waves and feed changes, which move the whole herd, from looking odd.
+        """
+        herd_temp, herd_hr = self._herd_medians(ref)
+        herd_long, herd_short = self._herd_activity(ref)
+        if None in (herd_temp, herd_hr, herd_long, herd_short):
+            return []
+        rows = []
+        for animal_id, a in self.animals.items():
+            if ref - a.last_seen > 15 * MIN or None in (a.temp_s, a.hr_s, a.ratio_long, a.ratio_short):
+                continue
+            rows.append(
+                (
+                    animal_id,
+                    [a.temp_s - herd_temp, a.hr_s - herd_hr, a.ratio_long / herd_long, a.ratio_short / herd_short],
+                )
+            )
+        return rows
+
+    def _check_model(self, ref: float) -> list[AlertMsg]:
+        rows = self.feature_rows(ref)
+        if not rows:
+            return []
+        out = []
+        for (animal_id, feats), (unusual, score) in zip(rows, self.scorer.judge([f for _, f in rows]), strict=True):
+            a = self.animals[animal_id]
+            if not unusual:
+                a.model_bad = 0
+                out += self._clear(animal_id, "unusual_pattern", ref)
+                continue
+            a.model_bad += 1
+            if a.model_bad >= self.cfg.model_hold_n:
+                dt, dhr, act, _ = feats
+                out += self._raise(
+                    animal_id,
+                    "unusual_pattern",
+                    "info",
+                    ref,
+                    f"Unusual combination of vitals (temp {dt:+.1f} C, HR {dhr:+.0f} vs herd, activity {act:.0%})",
+                    score,
                 )
         return out
 
@@ -361,6 +419,8 @@ class Detector:
             return []
         self.open[key] = ts
         source = "baseline" if kind in ("low_activity", "high_activity") else "rule"
+        if kind == "unusual_pattern":
+            source = "model"
         return [
             AlertMsg(
                 ts=ts,
