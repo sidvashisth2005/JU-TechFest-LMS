@@ -119,7 +119,13 @@ When everything passes: reassemble, then run `Rover/picam_motor_Auto&manual-move
 - [x] S7b `ml/anomaly/` detector — eval (21 d, 50 cows): fever recall 98%, lameness 95%, estrus 91%, dropout 100%, precision 77–80%, 6–7 false/100 cow-days; reports in simulator/out/eval_*/report.json
 - [x] S10 `web/` dashboard (Herd, Animal, Alerts, Barn, Rover, Disease; screenshots verified with Playwright)
 - [x] S8 `rover/` server: mock + real drivers, cameras (webcam/video/synthetic/picamera2/pixy2), green + YOLO-ONNX detectors, IoU tracker, PD follow, safety (obstacle/255-after-close/battery/watchdog). `turn_sign` needs hardware calibration.
-- [ ] S7c YOLO cow detection · [ ] S9 firmware · [ ] S11 hosting (Cloudflare Tunnel) · [ ] S12 CI/docs · [ ] git commit + GitHub push (ask user)
+- [~] S7c YOLO cow detection: WSL venv `/root/lms-ml` (torch 2.14+cu126, ultralytics, fiftyone) ready; pipeline `ml/detection/run_pipeline.sh` running detached (log `/root/lms-pipeline.log`, runs `/root/lms-runs/cow-yolo11n`, data `/root/lms-data/cows`); thermal guard 78→70 °C. When done: `ml/detection/models/cow.onnx` + `report.json`; then add results to docs/ml.md and test `python -m rover.server --mock --camera video:<cow clip> --detector yolo:ml/detection/models/cow.onnx`.
+- [x] S9 firmware: ESP32 collar compiles (RAM 14%, flash 61%); UNO bridge compiles (RAM 94% — tight); barn/ serial bridge + Sense HAT publisher (+tests)
+- [x] S11 hosting: `infra/run_all.ps1 [-Simulator] [-MockRover] [-Tunnel]`, `infra/stop_all.ps1`, `infra/tunnel.ps1` (Cloudflare quick tunnel — not started yet; ask before exposing publicly)
+- [x] S12 CI (.github/workflows/ci.yml) + docs/ (setup, architecture, ml, hosting) + README
+- [x] GitHub: private repo https://github.com/sidvashisth2005/lms-rover (gh CLI logged in as sidvashisth2005). `.pio/` build dirs were committed once in b3a35d9 then untracked — still in history.
+- [x] Telegram: bot @lms_siddhant_bot, token + chat id in .env; notifier verified sending. The token text leaked into a local tool log once (bash sourcing .env) — user advised to /revoke and regenerate.
+- Known: remaining false alarms are activity alerts (~6–7 per 100 cow-days); during a 48 h backfill several cows get low_activity warnings.
 - Dev stack: `infra\start_services.ps1`, then `python -m backend.workers.ingest|processor|notifier`, `uvicorn backend.api.main:app --port 8000`, `python -m simulator.run live --backfill-hours 48 --demo`, `python -m rover.server --mock --camera synthetic --port 8080`. `.env` ROVER_URL currently points to the laptop mock (change back to the Pi IP for hardware).
 - From Git Bash, call WSL scripts with `MSYS_NO_PATHCONV=1` or Git Bash rewrites `/mnt/d/...` paths.
 
