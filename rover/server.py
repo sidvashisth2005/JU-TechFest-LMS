@@ -188,6 +188,7 @@ class Rover:
             "vision_fps": round(self.vision_fps, 1),
             "mock": self.mock,
             "stop_cm": self.cfg.stop_distance_cm,
+            "person_close": self.safety.person_close,
         }
 
     def _publish_status(self, now: float) -> None:
@@ -337,7 +338,12 @@ def main():
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
-    cfg = RoverConfig(turn_sign=args.turn_sign, drive_sign=args.drive_sign, stop_distance_cm=args.stop_cm)
+    cfg = RoverConfig(
+        turn_sign=args.turn_sign,
+        drive_sign=args.drive_sign,
+        stop_distance_cm=args.stop_cm,
+        person_stop_frac=float(os.environ.get("ROVER_PERSON_STOP", RoverConfig.person_stop_frac)),
+    )
     client = mqtt_connect(args.mqtt) if args.mqtt else None
     rover = Rover(cfg, args.camera, args.detector, args.mock, client)
     log.info(

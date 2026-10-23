@@ -36,7 +36,9 @@ class RoverConfig:
     manual_timeout_s: float = 0.5  # manual drive stops if commands stop arriving (watchdog)
     battery_min_v: float = 9.0  # refuse to drive below this
     # a person whose box is taller than this fraction of the frame is close: no forward motion
-    person_stop_frac: float = 0.35
+    # The Pi camera's view is narrow: a person 1 m away already fills ~75% of the frame height,
+    # so only a box that nearly fills it means "about to touch". 0 = off. (env ROVER_PERSON_STOP)
+    person_stop_frac: float = 0.85
     person_min_conf: float = 0.4
 
     loop_hz: float = 20  # motor/safety loop; the camera + detector run in their own thread

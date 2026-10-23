@@ -21,6 +21,16 @@ interface RoverStatus {
   fps: number | null;
   mock: boolean;
   stop_cm?: number;
+  person_close?: boolean;
+  safety?: string | null;
+}
+
+/** Why forward motion is blocked, in words: the rover's own reason, else person, else obstacle. */
+function blockedText(s: RoverStatus): string {
+  if (s.safety) return `${s.safety[0].toUpperCase()}${s.safety.slice(1)} — stopped`;
+  if (s.person_close) return "Person close — forward blocked";
+  if (s.distance_cm != null) return `Obstacle ${s.distance_cm.toFixed(0)} cm — forward blocked`;
+  return "Obstacle very close — forward blocked";
 }
 
 const KEYS: Record<string, Direction> = {
@@ -140,7 +150,7 @@ export default function Rover() {
             )}
             {status?.blocked && (
               <div className="absolute bottom-3 left-3 rounded-lg bg-red-600 px-3 py-1 text-sm font-semibold text-white">
-                Obstacle — stopped
+                {blockedText(status)}
               </div>
             )}
             {status?.fps != null && (

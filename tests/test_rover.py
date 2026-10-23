@@ -57,14 +57,22 @@ def test_no_echo_right_after_close_reading_is_blocked():
 def test_close_person_blocks_forward_far_person_does_not():
     s = Safety(RoverConfig())
     s.update(150, 1.0)  # ultrasonic sees nothing
-    near = Det("person", 0.9, (300, 100, 360, 400), 3)  # 300 px of a 480 px frame
+    near = Det("person", 0.9, (300, 20, 360, 460), 3)  # 440 px of a 480 px frame: about to touch
+    one_metre = Det("person", 0.9, (300, 100, 360, 460), 5)  # ~75%: a seated person ~1 m away
     far = Det("person", 0.9, (300, 200, 320, 260), 4)
-    s.update_people([far], H)
+    s.update_people([far, one_metre], H)
     assert s.filter(200, 200, 1.0, 11.0) == (200, 200)
     s.update_people([near], H)
     assert s.filter(200, 200, 1.0, 11.0) == (0.0, 0.0)
     assert s.reason == "person close"
     assert s.filter(-150, -150, 1.0, 11.0) == (-150, -150)  # can still back away
+
+
+def test_person_stop_can_be_switched_off():
+    s = Safety(RoverConfig(person_stop_frac=0))
+    s.update(150, 1.0)
+    s.update_people([Det("person", 0.9, (0, 0, 640, 480), 1)], H)
+    assert s.filter(200, 200, 1.0, 11.0) == (200, 200)
 
 
 def test_low_battery_stops_everything():

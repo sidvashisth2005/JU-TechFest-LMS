@@ -28,7 +28,8 @@ class Safety:
     def update_people(self, dets, frame_h: int) -> None:
         """Pass this frame's detections; any confident, close person blocks forward motion."""
         self.person_close = any(
-            d.label == "person"
+            self.cfg.person_stop_frac > 0
+            and d.label == "person"
             and d.confidence >= self.cfg.person_min_conf
             and d.height / frame_h >= self.cfg.person_stop_frac
             for d in dets
