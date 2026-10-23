@@ -1,7 +1,8 @@
 """Target detection for the rover camera.
 
     make_detector("green")                       legacy green-marker tracking (HSV 35-90)
-    make_detector("yolo:ml/detection/cow.onnx")  YOLO (v8/11 ONNX export) via OpenCV DNN
+    make_detector("yolo:ml/detection/models/coco_yolo11n.onnx")  YOLO ONNX via OpenCV DNN
+    make_detector("ncnn:ml/detection/models/cow_ncnn_model")      YOLO NCNN (faster on the Pi)
 
 Detections get a track id from a small IoU tracker so the follow controller can stick to
 the same animal between frames.
@@ -59,33 +60,31 @@ class GreenDetector:
         return sorted(out, key=lambda d: -d.height)[:5]
 
 
-class YoloOnnxDetector:
-    """YOLOv8/YOLO11 ONNX model (output 1 x (4+classes) x N) run with OpenCV DNN."""
+class _YoloBase:
+    """Shared letterbox + decode for YOLOv8/YOLO11 exports (output (4+classes) x N)."""
 
-    def __init__(self, path: str, imgsz: int = 320, conf: float = 0.35, iou: float = 0.45, labels=None):
-        self.path = Path(path)
-        self.name = f"yolo {self.path.name}"
-        self.net = cv2.dnn.readNetFromONNX(str(self.path))
+    def __init__(self, names_file: Path, imgsz: int, conf: float, iou: float, labels):
         self.imgsz = imgsz
         self.conf = conf
         self.iou = iou
-        names_file = self.path.with_suffix(".names.json")
         if names_file.exists():
             self.names = {int(k): v for k, v in json.loads(names_file.read_text()).items()}
         else:
-            self.names = COCO_NAMES
+            self.names = COCO_NAMES  # stock COCO model
         self.keep = set(labels) if labels else set(self.names.values())
 
-    def detect(self, frame: np.ndarray) -> list[Det]:
+    def _letterbox(self, frame: np.ndarray):
         h, w = frame.shape[:2]
         scale = self.imgsz / max(h, w)
         nh, nw = round(h * scale), round(w * scale)
-        canvas = np.full((self.imgsz, self.imgsz, 3), 114, np.uint8)  # letterbox
+        canvas = np.full((self.imgsz, self.imgsz, 3), 114, np.uint8)
         top, left = (self.imgsz - nh) // 2, (self.imgsz - nw) // 2
         canvas[top : top + nh, left : left + nw] = cv2.resize(frame, (nw, nh))
-        blob = cv2.dnn.blobFromImage(canvas, 1 / 255.0, swapRB=True)
-        self.net.setInput(blob)
-        out = self.net.forward()[0].T  # N x (4 + classes)
+        return canvas, scale, top, left
+
+    def _decode(self, out: np.ndarray, frame_shape, scale, top, left) -> list[Det]:
+        """`out`: N x (4 + classes) rows of (cx, cy, w, h, class scores...) in letterbox pixels."""
+        h, w = frame_shape[:2]
         scores = out[:, 4:]
         cls = scores.argmax(1)
         conf = scores[np.arange(len(cls)), cls]
@@ -95,9 +94,14 @@ class YoloOnnxDetector:
         boxes = []
         for i in ids:
             cx, cy, bw, bh = out[i, :4]
-            x1 = (cx - bw / 2 - left) / scale
-            y1 = (cy - bh / 2 - top) / scale
-            boxes.append([float(x1), float(y1), float(bw / scale), float(bh / scale)])
+            boxes.append(
+                [
+                    float((cx - bw / 2 - left) / scale),
+                    float((cy - bh / 2 - top) / scale),
+                    float(bw / scale),
+                    float(bh / scale),
+                ]
+            )
         picked = cv2.dnn.NMSBoxes(boxes, [float(conf[i]) for i in ids], self.conf, self.iou)
         dets = []
         for k in np.array(picked).flatten():
@@ -111,6 +115,52 @@ class YoloOnnxDetector:
                 )
             )
         return dets
+
+
+class YoloOnnxDetector(_YoloBase):
+    """YOLO ONNX export run with OpenCV DNN (laptop and Pi; ~8 fps on a Pi 4 at 320 px)."""
+
+    def __init__(self, path: str, imgsz: int = 320, conf: float = 0.35, iou: float = 0.45, labels=None):
+        self.path = Path(path)
+        self.name = f"yolo {self.path.name}"
+        self.net = cv2.dnn.readNetFromONNX(str(self.path))
+        super().__init__(self.path.with_suffix(".names.json"), imgsz, conf, iou, labels)
+
+    def detect(self, frame: np.ndarray) -> list[Det]:
+        canvas, scale, top, left = self._letterbox(frame)
+        self.net.setInput(cv2.dnn.blobFromImage(canvas, 1 / 255.0, swapRB=True))
+        out = self.net.forward()[0].T  # N x (4 + classes)
+        return self._decode(out, frame.shape, scale, top, left)
+
+
+class YoloNcnnDetector(_YoloBase):
+    """YOLO NCNN export (a folder with model.ncnn.param/.bin), usually faster than ONNX on the Pi.
+
+    Needs `pip install ncnn`. The folder sits next to `<name>.names.json`, e.g.
+    ml/detection/models/cow_ncnn_model  +  ml/detection/models/cow.names.json.
+    """
+
+    def __init__(self, folder: str, imgsz: int = 320, conf: float = 0.35, iou: float = 0.45, labels=None, threads=4):
+        import ncnn  # only needed for this backend
+
+        self.folder = Path(folder)
+        self.name = f"ncnn {self.folder.name}"
+        self.net = ncnn.Net()
+        self.net.opt.num_threads = threads
+        self.net.load_param(str(self.folder / "model.ncnn.param"))
+        self.net.load_model(str(self.folder / "model.ncnn.bin"))
+        self._ncnn = ncnn
+        stem = self.folder.name.removesuffix("_ncnn_model")
+        super().__init__(self.folder.parent / f"{stem}.names.json", imgsz, conf, iou, labels)
+
+    def detect(self, frame: np.ndarray) -> list[Det]:
+        canvas, scale, top, left = self._letterbox(frame)
+        rgb = np.ascontiguousarray(canvas[:, :, ::-1].transpose(2, 0, 1), dtype=np.float32) / 255.0
+        ex = self.net.create_extractor()
+        ex.input("in0", self._ncnn.Mat(rgb))
+        _, out = ex.extract("out0")
+        out = np.array(out).reshape(-1, np.array(out).shape[-1]).T  # (4+classes) x N -> N x (4+classes)
+        return self._decode(out, frame.shape, scale, top, left)
 
 
 def iou(a, b) -> float:
@@ -160,6 +210,8 @@ def make_detector(spec: str):
         return GreenDetector()
     if spec.startswith("yolo:"):
         return YoloOnnxDetector(spec[len("yolo:") :])
+    if spec.startswith("ncnn:"):
+        return YoloNcnnDetector(spec[len("ncnn:") :])
     raise ValueError(f"unknown detector {spec!r}")
 
 

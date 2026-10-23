@@ -1,6 +1,6 @@
 """Rover server: camera + detection + follow controller + safety, with an HTTP API.
 
-On the Pi:     python -m rover.server --camera picamera2 --detector yolo:models/cow.onnx
+On the Pi:     python -m rover.server --camera picamera2 --detector yolo:ml/detection/models/coco_yolo11n.onnx
 Temporary:     python -m rover.server --camera pixy2 --detector green
 On a laptop:   python -m rover.server --mock --camera webcam      (or --camera synthetic)
 
@@ -275,7 +275,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--mock", action="store_true", help="no BrickPi: simulated motors and ultrasonic")
     ap.add_argument("--camera", default="synthetic", help="webcam[:N] | video:PATH | synthetic | picamera2 | pixy2")
-    ap.add_argument("--detector", default="green", help="green | yolo:PATH.onnx")
+    ap.add_argument("--detector", default="green", help="green | yolo:PATH.onnx | ncnn:FOLDER")
     ap.add_argument("--port", type=int, default=8080)
     ap.add_argument("--mqtt", default=os.environ.get("ROVER_MQTT_HOST"), help="broker host for status/detections")
     ap.add_argument("--turn-sign", type=int, choices=[-1, 1], default=int(os.environ.get("ROVER_TURN_SIGN", 1)))

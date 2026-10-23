@@ -27,6 +27,7 @@ ml/**/runs/
 !ml/detection/models/cow.onnx
 !ml/detection/models/coco_yolo11n.onnx
 !ml/detection/models/cow_ncnn_model/
+!ml/detection/models/coco_yolo11n_ncnn_model/
 ml/detection/models/cow_ncnn_model/__pycache__/
 ml/**/artifacts/*.joblib
 
