@@ -1,12 +1,20 @@
 """Proxy to the rover server on the Pi, so the dashboard only ever talks to this API
 (one origin, one login) and the Pi is never exposed to the internet directly."""
 
+import json
+import logging
+import os
+import subprocess
+import time
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from backend.api.auth import require_user
-from backend.config import settings
+from backend.config import ROOT, settings
+
+log = logging.getLogger("api.rover")
 
 router = APIRouter(prefix="/api/rover", tags=["rover"], dependencies=[Depends(require_user)])
 TIMEOUT = httpx.Timeout(3.0, read=5.0)
@@ -60,6 +68,46 @@ async def control(request: Request):
 @router.post("/mode")
 async def mode(request: Request):
     return await _forward("POST", "/mode", await request.json())
+
+
+@router.post("/shutdown")
+async def shutdown() -> dict:
+    """Dashboard "Stop rover & dashboard": power the rover off cleanly, then stop the dashboard
+    (API + workers) on this laptop. infra/pi_watch.py keeps running and starts everything again
+    when the rover is switched back on (its beacon arrives from a new boot)."""
+    try:
+        await _forward("POST", "/power-off")
+        rover = "powering off"
+    except HTTPException as e:
+        rover = f"not reached ({e.detail})"
+    try:
+        boot = json.loads((ROOT / "logs" / "pi_state.json").read_text(encoding="utf-8")).get("pi", {}).get("boot")
+    except (OSError, ValueError):
+        boot = None
+    (ROOT / "logs").mkdir(exist_ok=True)
+    (ROOT / "logs" / "dashboard_sleep.json").write_text(
+        json.dumps({"since": time.time(), "rover_boot": boot, "rover": rover}), encoding="utf-8"
+    )
+    log.warning("shutdown from the dashboard: rover %s; dashboard stops in 3 s", rover)
+    if os.name == "nt":
+        flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+        subprocess.Popen(
+            [
+                "powershell",
+                "-NoProfile",
+                "-WindowStyle",
+                "Hidden",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(ROOT / "infra" / "sleep_dashboard.ps1"),
+                "-DelaySeconds",
+                "3",
+            ],
+            cwd=ROOT,
+            creationflags=flags,
+        )
+    return {"rover": rover, "dashboard": "stopping in 3 s", "wakes_on_rover_boot": bool(boot)}
 
 
 @router.get("/stream.mjpg")

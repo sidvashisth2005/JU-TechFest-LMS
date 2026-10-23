@@ -2,7 +2,7 @@
 """Tell the laptop (and your phone) where this Pi is. Runs on both Pis as a user service.
 
 Every 10 s, while the Pi has an address, it broadcasts one small UDP packet on each network it is on
-(port 50505): {"lms": "pi", "host", "user", "role", "ips", "ssid"}. The laptop's infra/pi_watch.py
+(port 50505): {"lms": "pi", "host", "user", "role", "ips", "ssid", "boot"}. The laptop's infra/pi_watch.py
 hears it and keeps .env and the Pi's MQTT_HOST pointed at the right addresses.
 
 When the address changes (first connect after boot, another Wi-Fi, a new DHCP lease) it also sends
@@ -96,6 +96,8 @@ def main() -> None:
     host, user = socket.gethostname(), getpass.getuser()
     role = conf.get("LMS_ROLE", os.environ.get("LMS_ROLE", ""))
     told: tuple = ()
+    # changes on every boot: lets the laptop tell "the rover was switched on again" from a repeat
+    boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     while True:
@@ -103,7 +105,9 @@ def main() -> None:
         if found:
             ips = [ip for _, ip, _ in found]
             ssid = wifi_name()
-            msg = json.dumps({"lms": "pi", "host": host, "user": user, "role": role, "ips": ips, "ssid": ssid})
+            msg = json.dumps(
+                {"lms": "pi", "host": host, "user": user, "role": role, "ips": ips, "ssid": ssid, "boot": boot}
+            )
             for _, _, brd in found:
                 try:
                     sock.sendto(msg.encode(), (brd, PORT))

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Bot, Hand, OctagonX, Pause } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Bot, Hand, OctagonX, Pause, Power } from "lucide-react";
 import { api, authedUrl, errorText } from "../api";
 import { Card, ErrorNote, Page } from "../components/ui";
 import { fmt } from "../format";
@@ -125,13 +125,54 @@ export default function Rover() {
     }
   };
 
+  const [stopped, setStopped] = useState<string | null>(null);
+
+  const shutdown = async () => {
+    const sure = window.confirm(
+      "Stop the rover and the dashboard?\n\nThe rover's Pi shuts down cleanly and this dashboard goes offline. " +
+        "Switch the rover on again to bring both back (the link comes on Telegram).",
+    );
+    if (!sure) return;
+    try {
+      const { data } = await api.post("/api/rover/shutdown");
+      setStopped(`Rover: ${data.rover}. Dashboard: ${data.dashboard}.`);
+    } catch (e) {
+      setError(errorText(e));
+    }
+  };
+
   const online = status !== null;
   const dist = status?.distance_cm;
+
+  if (stopped) {
+    return (
+      <Page title="Rover and dashboard stopped" subtitle={stopped}>
+        <Card>
+          <div className="flex items-start gap-3">
+            <Power className="mt-1 h-6 w-6 shrink-0 text-red-600" />
+            <div className="space-y-2 text-forest-800">
+              <p>The rover's Pi is shutting down. Wait until its green light stops blinking before switching the power off.</p>
+              <p>This dashboard goes offline in a few seconds.</p>
+              <p className="font-semibold">To start again: switch the rover on. About a minute later the dashboard is back and its link arrives on Telegram.</p>
+            </div>
+          </div>
+        </Card>
+      </Page>
+    );
+  }
 
   return (
     <Page
       title="Rover"
       subtitle={online ? `${status.rover_id} · camera ${status.camera} · detector ${status.detector}${status.mock ? " · simulated hardware" : ""}` : "Not connected"}
+      actions={
+        <button
+          onClick={shutdown}
+          className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-700"
+        >
+          <Power className="h-4 w-4" /> Stop rover &amp; dashboard
+        </button>
+      }
     >
       <ErrorNote text={error} />
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">

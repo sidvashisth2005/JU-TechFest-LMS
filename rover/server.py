@@ -11,12 +11,14 @@ Endpoints (the dashboard reaches them through the backend's /api/rover proxy):
   GET  /stream.mjpg   annotated camera stream
   GET  /snapshot.jpg  one annotated frame
   POST /mock          {"distance_cm": 12, "battery_v": 11} (only with --mock, for testing safety)
+  POST /power-off     stop the motors and shut the Pi down cleanly (dashboard "Stop" button)
 """
 
 import argparse
 import hmac
 import logging
 import os
+import subprocess
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -297,6 +299,22 @@ def make_app(rover: Rover, token: str | None = None) -> FastAPI:
                     yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpg + b"\r\n"
 
         return StreamingResponse(frames(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+    @app.post("/power-off")
+    def power_off():
+        if rover.mock:
+            raise HTTPException(403, "not on a mock rover (it would shut down this computer)")
+        with rover.lock:
+            rover.controller.set_mode("idle")
+        rover.hw.stop()
+        log.warning("power-off requested from the dashboard")
+
+        def shutdown():
+            # a clean shutdown flushes the SD card; pulling the power has left empty files before
+            subprocess.run(["sudo", "-n", "/usr/bin/systemctl", "poweroff"], check=False)
+
+        threading.Timer(1.0, shutdown).start()  # answer the request first
+        return {"ok": True, "powering_off": True}
 
     @app.post("/mock")
     def mock(body: MockIn):
