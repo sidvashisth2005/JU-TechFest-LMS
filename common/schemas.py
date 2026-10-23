@@ -6,6 +6,7 @@ Rules:
 - Units are in the field names' docs and never change.
 """
 
+import math
 import time
 from typing import Literal
 
@@ -46,10 +47,41 @@ class EnvMsg(BaseModel):
     temp: float | None = Field(None, ge=-40, le=70, description="air temperature, deg C")
     humidity: float | None = Field(None, ge=0, le=100, description="relative humidity, %")
     pressure: float | None = Field(None, ge=300, le=1200, description="air pressure, hPa")
+    # station motion sensors (Sense HAT IMU); all optional
+    tilt: float | None = Field(None, ge=0, le=180, description="angle from the station's mounting position, deg")
+    vibration: float | None = Field(None, ge=0, le=20, description="RMS acceleration change since last reading, g")
+    heading: float | None = Field(None, ge=0, le=360, description="compass heading, deg (uncalibrated)")
+    magnetic: float | None = Field(None, ge=0, le=5000, description="magnetic field strength, uT")
 
     @property
     def thi(self) -> float | None:
         return thi(self.temp, self.humidity)
+
+
+StationEventKind = Literal["knock", "tilted", "level", "gate_open", "gate_closed", "ack", "hello"]
+
+
+class StationEventMsg(BaseModel):
+    """Something a barn station noticed or a person did there. Topic: lms/barn/{station_id}/event
+
+    knock = sudden jolt (animal bumped it), tilted/level = knocked over / back upright,
+    gate_open/gate_closed = magnet on the gate moved away/back, ack = joystick held to
+    acknowledge the station's alerts, hello = station (re)started (detail has its IP).
+    """
+
+    station_id: str = Field(min_length=1, max_length=32)
+    ts: float = Field(default_factory=now)
+    kind: StationEventKind
+    value: float | None = None
+    detail: str | None = Field(None, max_length=200)
+
+
+class StationStateMsg(BaseModel):
+    """Backend -> station, retained. Topic: lms/barn/{station_id}/state"""
+
+    ts: float = Field(default_factory=now)
+    open_alerts: int = 0
+    worst: Severity | None = None
 
 
 class Detection(BaseModel):
@@ -104,3 +136,12 @@ def thi(temp_c: float | None, rh: float | None) -> float | None:
         return None
     t_f = 1.8 * temp_c + 32
     return round(t_f - (0.55 - 0.0055 * rh) * (t_f - 58), 1)
+
+
+def dew_point(temp_c: float | None, rh: float | None) -> float | None:
+    """Dew point in deg C (Magnus formula, Sonntag 1990 constants). Below it, water condenses."""
+    if temp_c is None or rh is None or rh <= 0:
+        return None
+    a, b = 17.62, 243.12
+    g = math.log(rh / 100) + a * temp_c / (b + temp_c)
+    return round(b * g / (a - g), 1)

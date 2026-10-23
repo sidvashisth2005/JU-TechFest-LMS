@@ -46,6 +46,22 @@ CREATE TABLE IF NOT EXISTS env_readings (
 );
 SELECT create_hypertable('env_readings', 'ts', if_not_exists => TRUE, chunk_time_interval => INTERVAL '7 days');
 CREATE INDEX IF NOT EXISTS env_station_ts ON env_readings (station_id, ts DESC);
+-- barn station motion sensors (Sense HAT IMU)
+ALTER TABLE env_readings ADD COLUMN IF NOT EXISTS tilt real;       -- deg from mounting position
+ALTER TABLE env_readings ADD COLUMN IF NOT EXISTS vibration real;  -- RMS g
+ALTER TABLE env_readings ADD COLUMN IF NOT EXISTS heading real;    -- deg
+ALTER TABLE env_readings ADD COLUMN IF NOT EXISTS magnetic real;   -- uT
+
+-- knocks, tilt, gate, joystick acks, restarts reported by barn stations
+CREATE TABLE IF NOT EXISTS station_events (
+    ts          timestamptz NOT NULL,
+    station_id  text        NOT NULL,
+    kind        text        NOT NULL,
+    value       real,
+    detail      text
+);
+SELECT create_hypertable('station_events', 'ts', if_not_exists => TRUE, chunk_time_interval => INTERVAL '7 days');
+CREATE INDEX IF NOT EXISTS station_events_station_ts ON station_events (station_id, ts DESC);
 
 CREATE TABLE IF NOT EXISTS rover_status (
     ts          timestamptz NOT NULL,
@@ -115,3 +131,4 @@ SELECT add_continuous_aggregate_policy('vitals_1h', start_offset => INTERVAL '3 
 SELECT add_retention_policy('vitals', INTERVAL '90 days', if_not_exists => TRUE);
 SELECT add_retention_policy('rover_status', INTERVAL '30 days', if_not_exists => TRUE);
 SELECT add_retention_policy('detections', INTERVAL '30 days', if_not_exists => TRUE);
+SELECT add_retention_policy('station_events', INTERVAL '90 days', if_not_exists => TRUE);

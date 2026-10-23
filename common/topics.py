@@ -4,6 +4,7 @@ PREFIX = "lms"
 
 COLLAR_VITALS_SUB = f"{PREFIX}/collar/+/vitals"
 BARN_ENV_SUB = f"{PREFIX}/barn/+/env"
+BARN_EVENT_SUB = f"{PREFIX}/barn/+/event"
 ROVER_STATUS_SUB = f"{PREFIX}/rover/+/status"
 ROVER_DETECTIONS_SUB = f"{PREFIX}/rover/+/detections"
 ALERTS = f"{PREFIX}/alerts"
@@ -15,6 +16,15 @@ def collar_vitals(animal_id: str) -> str:
 
 def barn_env(station_id: str) -> str:
     return f"{PREFIX}/barn/{station_id}/env"
+
+
+def barn_event(station_id: str) -> str:
+    return f"{PREFIX}/barn/{station_id}/event"
+
+
+def barn_state(station_id: str) -> str:
+    """Backend -> station (retained): open alert count for the station's LED."""
+    return f"{PREFIX}/barn/{station_id}/state"
 
 
 def rover_status(rover_id: str) -> str:

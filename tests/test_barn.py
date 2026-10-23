@@ -1,4 +1,4 @@
-from barn.sensehat_pub import band_colour, corrected_air_temp
+from barn.sensehat_pub import band_colour, corrected_air_temp, letter_colour
 from barn.serial_bridge import parse_line
 
 
@@ -44,3 +44,16 @@ def test_esp32_debug_lines_are_skipped():
 
 def test_uno_status_line_is_skipped():
     assert parse_line('{"status":"ready","ppg":"max30100","ppg_ok":true,"imu":true,"imu_id":104}', None) is None
+
+
+def test_env_line_from_esp8266_collar():
+    from common.schemas import EnvMsg
+
+    m = parse_line('{"station_id":"C001-collar","temp":31.2,"humidity":64.0,"pressure":null}', "C001")
+    assert isinstance(m, EnvMsg)
+    assert m.station_id == "C001-collar" and m.temp == 31.2 and m.humidity == 64.0
+
+
+def test_sensehat_letter_readable_on_band_colours():
+    assert letter_colour(band_colour(75)) == (0, 0, 255)  # yellow -> blue letter (black = LEDs off)
+    assert letter_colour(band_colour(70)) == (255, 255, 255)

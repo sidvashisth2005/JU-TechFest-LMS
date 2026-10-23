@@ -1,0 +1,12 @@
+# Broadcast this Pi's IP every 10 s (+ Telegram on change). systemd USER unit, no sudo needed.
+# Installed by infra/pi/install_beacon.sh.
+[Unit]
+Description=LMS beacon: announce this Pi's IP to the laptop and Telegram
+
+[Service]
+ExecStart=/usr/bin/python3 %h/.local/lib/lms/lms_beacon.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

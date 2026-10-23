@@ -37,3 +37,17 @@ export function thiBand(thi: number | null | undefined): { label: string; classN
   if (thi >= 72) return { label: "Mild stress", className: "text-amber-600" };
   return { label: "Comfortable", className: "text-emerald-700" };
 }
+
+/** Dew point in °C (Magnus formula); same as common.schemas.dew_point. */
+export function dewPoint(temp: number | null | undefined, rh: number | null | undefined): number | null {
+  if (temp === null || temp === undefined || rh === null || rh === undefined || rh <= 0) return null;
+  const a = 17.62;
+  const b = 243.12;
+  const g = Math.log(rh / 100) + (a * temp) / (b + temp);
+  return Math.round(((b * g) / (a - g)) * 10) / 10;
+}
+
+export function compassLabel(heading: number | null | undefined): string {
+  if (heading === null || heading === undefined) return "—";
+  return ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.floor((((heading % 360) + 360) % 360 + 22.5) / 45) % 8];
+}

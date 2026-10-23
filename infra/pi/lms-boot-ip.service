@@ -1,0 +1,13 @@
+# Show this Pi's IP after boot (Sense HAT, SD card file, console); setup hotspot when no Wi-Fi.
+# Installed by infra/pi/install_boot_ip.sh.
+[Unit]
+Description=LMS: announce this Pi's IP after boot, setup hotspot if no known Wi-Fi
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/lib/lms/lms_boot_ip.py
+
+[Install]
+WantedBy=multi-user.target

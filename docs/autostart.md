@@ -22,8 +22,9 @@ Output aisa aata hai:
 
 ```
 mode: on
-laptop autostart: ON
-pi rover at boot: ON
+laptop autostart:    ON
+rover pi at boot:    ON
+barn pi (Sense HAT): ON
 ```
 
 - Command chalate waqt **Pi on aur same Wi-Fi pe hona chahiye**, kyunki Pi ka setting SSH se badalta hai. Pi band ho to warning aayegi; laptop wala hissa phir bhi badal jaayega. Pi on karke dobara chala do.
@@ -51,6 +52,15 @@ pi rover at boot: ON
 
 Rover boot pe **idle** mode mein shuru hota hai: motors sirf dashboard ke command pe chalte hain, aur bina
 `ROVER_TOKEN` ke koi command nahi le sakta.
+
+**Barn Pi** (`infra/pi/lms-barn.sh`, laptop `.env` mein `BARN_PI=rpi-1@<ip>`)
+- Sense HAT → MQTT publisher (`barn.sensehat_pub`), systemd **user** service `lms-sensehat`
+  (linger on, isliye bina login boot pe chalti hai, sudo nahi chahiye).
+- `on` = boot pe + abhi chalu, `off` = boot pe nahi + abhi band. Laptop/rover se ulta, ye turant lagta hai.
+- Sirf barn Pi switch karna ho to Pi pe: `bash ~/lms/infra/pi/lms-barn.sh toggle`
+  (`on` / `off` / `status` / `logs` / `restart` bhi).
+- Settings Pi ki `~/lms/.env` mein: `MQTT_HOST` (laptop IP), `BARN_STATION`, `BARN_INTERVAL`,
+  `BARN_LETTER=S` (LED pe letter, background = THI colour), `BARN_BRIGHT=1` (full brightness).
 
 ## Normal mode mein haath se chalana
 
@@ -97,4 +107,20 @@ Pi pe (ya laptop se `ssh pi@<pi-ip> "<command>"`):
 | `infra/start_services.ps1`, `infra/stop_services.ps1` | sirf WSL services |
 | `infra/pi/lms-pi.sh` | Pi services control |
 | `infra/pi/lms-rover.service` | Pi systemd unit |
+| `infra/pi/lms-barn.sh`, `infra/pi/lms-sensehat-user.service` | barn Pi (Sense HAT) control + user unit |
 | `infra/firewall_mqtt.ps1` | laptop firewall rule for port 1883 |
+
+## Pi ka IP dhoondhna (bina monitor)
+
+| Tarika | Kab kaam aata hai | Kaise |
+|---|---|---|
+| **Beacon (automatic)** | Pi kisi bhi Wi-Fi se jude | Dono Pi har 10 s apna IP broadcast karte hain (`lms-beacon` user service). Laptop pe `run_all` ka `piwatch` sunta hai aur `.env` + Pi ka `MQTT_HOST` khud update karta hai (`logs\piwatch.log`). IP badla to **Telegram** pe message bhi |
+| **Laptop finder** (sabse aasaan) | Pi aur laptop same Wi-Fi pe | `.venv\Scripts\python infra\find_pi.py` → dono Pi ka IP. `--update` = laptop `.env` (ROVER_URL, BARN_PI) + Pi ki `.env` (MQTT_HOST) khud update |
+| **LAN cable** | Wi-Fi nahi, laptop me Ethernet port | Pi ↔ laptop cable, phir wahi `find_pi.py` (IPv6 link-local se dhoondhta hai) |
+| **Barn Pi LED** | barn Pi | service start hote hi `IP 10.x.x.x` scroll; joystick se IP screen bhi |
+| **Setup hotspot** | Pi kisi jaane-pehchane Wi-Fi pe nahi juda | 90 s baad Pi khud Wi-Fi `LMS-<hostname>` banata hai (password = laptop `.env` `PI_SETUP_AP_PASSWORD`). Usse judo → `ssh <user>@10.42.0.1` → `sudo nmcli dev wifi connect "<naya wifi>" password "<pw>"` |
+| **SD card** | sab fail | card laptop me lagao → boot partition me `lms-ip.txt` |
+
+Ek baar har Pi pe: `.venv\Scripts\python infra\find_pi.py --install` → beacon (sudo nahi chahiye) +
+`lms-boot-ip` (hotspot, SD-card file, boot LED; passwordless sudo chahiye). ROVER_URL badle to laptop API
+restart karo (`stop_all` → `run_all`).

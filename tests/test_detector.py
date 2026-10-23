@@ -101,3 +101,54 @@ def test_multivariate_layer_needs_consecutive_unusual_scores():
     odd = [a for a in alerts if a.kind == "unusual_pattern"]
     assert len(odd) == 1  # third unusual score in a row; not repeated while open
     assert odd[0].animal_id == "C000" and odd[0].source == "model" and odd[0].severity == "info"
+
+
+def test_storm_risk_on_fast_pressure_fall_and_clears():
+    det = Detector()
+
+    def env(t, p):
+        return det.on_env(EnvMsg(station_id="barn1", ts=t, pressure=p))
+
+    out = []
+    for i in range(0, 181, 10):  # 3 h, falling 4 hPa
+        out += env(T0 + i * MIN, 1012 - 4 * i / 180)
+    assert [a.kind for a in out] == ["storm_risk"] and out[0].station_id == "barn1"
+    for i in range(190, 400, 10):  # steady again for 3 h
+        out += env(T0 + i * MIN, 1008)
+    assert ("barn1", "storm_risk") not in det.open
+
+
+def test_pressure_needs_history_before_judging():
+    det = Detector()
+    assert det.on_env(EnvMsg(station_id="barn1", ts=T0, pressure=1012)) == []
+    assert det.on_env(EnvMsg(station_id="barn1", ts=T0 + 30 * MIN, pressure=1005)) == []  # too little history
+
+
+def test_station_events_raise_and_clear():
+    from common.schemas import StationEventMsg
+
+    det = Detector()
+
+    def ev(t, kind, value=None):
+        return det.on_station_event(StationEventMsg(station_id="barn1", ts=t, kind=kind, value=value))
+
+    assert ev(T0, "tilted", 45)[0].kind == "station_tilted"
+    assert ev(T0 + 5, "level") == [] and ("barn1", "station_tilted") not in det.open
+    assert ev(T0, "gate_open", 120)[0].severity == "warning"
+    ev(T0 + 60, "gate_closed")
+    assert ("barn1", "gate_open") not in det.open
+    bump = ev(T0, "knock", 1.2)
+    assert bump[0].kind == "station_bumped" and bump[0].severity == "info"
+    assert ev(T0 + 10, "knock", 0.9) == []  # one open bump alert, not one per knock
+    det.tick(T0 + 31 * MIN)
+    assert ("barn1", "station_bumped") not in det.open
+    assert ev(T0, "hello") == [] and ev(T0, "ack") == []
+
+
+def test_silent_station_goes_offline_and_comes_back():
+    det = Detector()
+    det.on_env(EnvMsg(station_id="barn1", ts=T0, temp=25, humidity=40))
+    out = det.tick(T0 + 20 * MIN)
+    assert out and out[0].kind == "sensor_offline" and out[0].station_id == "barn1"
+    det.on_env(EnvMsg(station_id="barn1", ts=T0 + 21 * MIN, temp=25, humidity=40))
+    assert ("barn1", "sensor_offline") not in det.open

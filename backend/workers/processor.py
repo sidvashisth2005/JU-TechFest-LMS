@@ -4,7 +4,9 @@
 
 Reads validated messages from `lms:in` as part of the `processor` consumer group, writes
 them in batches, runs the streaming detector, stores alerts, and publishes live updates
-on Redis pub/sub for the API's WebSocket.
+on Redis pub/sub for the API's WebSocket. Barn stations get their open-alert count back over
+MQTT (retained `lms/barn/{id}/state`) for their LED, and a joystick "ack" event from a station
+acknowledges that station's open alerts.
 
 Run more than one (`--name p2`) only if you shard by animal; the detector keeps per-animal
 state in memory, so two processors on the same stream would each see half the herd.
@@ -20,11 +22,22 @@ import time
 from collections import defaultdict
 from datetime import UTC, datetime
 
+import paho.mqtt.client as mqtt
 import psycopg
 import redis
 
 from backend.config import CHANNEL_ALERTS, CHANNEL_LIVE, STREAM_GROUP, STREAM_IN, settings
-from common.schemas import AlertMsg, DetectionsMsg, EnvMsg, RoverStatusMsg, VitalsMsg, thi
+from common import topics
+from common.schemas import (
+    AlertMsg,
+    DetectionsMsg,
+    EnvMsg,
+    RoverStatusMsg,
+    StationEventMsg,
+    StationStateMsg,
+    VitalsMsg,
+    thi,
+)
 from ml.anomaly.detector import Detector
 from ml.anomaly.multivariate import load_scorer
 
@@ -32,7 +45,13 @@ log = logging.getLogger("processor")
 BATCH = 1000
 BLOCK_MS = 1000
 TICK_S = 60
-MODELS = {"vitals": VitalsMsg, "env": EnvMsg, "rover_status": RoverStatusMsg, "detections": DetectionsMsg}
+MODELS = {
+    "vitals": VitalsMsg,
+    "env": EnvMsg,
+    "event": StationEventMsg,
+    "rover_status": RoverStatusMsg,
+    "detections": DetectionsMsg,
+}
 
 
 def dt(ts: float) -> datetime:
@@ -50,6 +69,7 @@ class Processor:
         self.detector = Detector(scorer=scorer)
         log.info("multivariate model %s", "on" if scorer else "off (set LMS_IFOREST=1 to enable)")
         self.stop = False
+        self.mqtt = self._mqtt()
         try:
             self.r.xgroup_create(STREAM_IN, STREAM_GROUP, id="0", mkstream=True)
         except redis.ResponseError as e:
@@ -67,6 +87,16 @@ class Processor:
                 log.warning("database not reachable (%s); retrying in %.0fs", e, delay)
                 time.sleep(delay)
                 delay = min(delay * 2, 30)
+
+    @staticmethod
+    def _mqtt():
+        """Publisher for station state; connects in the background and keeps retrying."""
+        c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=f"lms-processor-{os.getpid()}")
+        c.username_pw_set(settings.mqtt_user, settings.mqtt_password)
+        c.reconnect_delay_set(1, 30)
+        c.connect_async(settings.mqtt_host, settings.mqtt_port)
+        c.loop_start()
+        return c
 
     def _recover_db(self) -> None:
         """After a failed write: roll back, or reconnect if the connection itself is gone."""
@@ -143,6 +173,7 @@ class Processor:
                     self._recover_db()
                     continue
                 self.publish_alerts(saved, resolved)
+                self.publish_station_state()  # also picks up acks made on the dashboard
 
     def handle(self, entries) -> bool:
         """Process a batch; False if it could not be stored (left pending for a retry)."""
@@ -165,6 +196,9 @@ class Processor:
         for v in sorted(groups["vitals"], key=lambda m: m.ts):
             alerts += self.detector.on_vitals(v)
             live.append({"type": "vitals", **v.model_dump(exclude_none=True)})
+        for ev in sorted(groups["event"], key=lambda m: m.ts):
+            alerts += self.detector.on_station_event(ev)
+            live.append({"type": "station_event", **ev.model_dump()})
         for s in groups["rover_status"]:
             live.append({"type": "rover_status", **s.model_dump()})
 
@@ -172,6 +206,7 @@ class Processor:
             self.write(groups)
             saved = self.insert_alerts(alerts)
             resolved = self.resolve_alerts()
+            acked = sum(self.ack_station(ev) for ev in groups["event"] if ev.kind == "ack")
             self.db.commit()
         except Exception:
             self._recover_db()
@@ -183,7 +218,9 @@ class Processor:
         for item in live:
             pipe.publish(CHANNEL_LIVE, json.dumps(item))
         pipe.execute()
-        self.publish_alerts(saved, resolved)
+        self.publish_alerts(saved, resolved + acked)
+        if groups["env"] or groups["event"] or any(a.station_id for a in alerts):
+            self.publish_station_state()
         return True
 
     def write(self, groups) -> None:
@@ -219,9 +256,24 @@ class Processor:
             env = groups["env"]
             if env:
                 cur.executemany(
-                    "INSERT INTO env_readings (ts, station_id, temp, humidity, pressure, thi) "
-                    "VALUES (%s, %s, %s, %s, %s, %s)",
-                    [(dt(e.ts), e.station_id, e.temp, e.humidity, e.pressure, thi(e.temp, e.humidity)) for e in env],
+                    "INSERT INTO env_readings "
+                    "(ts, station_id, temp, humidity, pressure, thi, tilt, vibration, heading, magnetic) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    [
+                        (
+                            dt(e.ts),
+                            e.station_id,
+                            e.temp,
+                            e.humidity,
+                            e.pressure,
+                            thi(e.temp, e.humidity),
+                            e.tilt,
+                            e.vibration,
+                            e.heading,
+                            e.magnetic,
+                        )
+                        for e in env
+                    ],
                 )
                 last = {}
                 for e in env:
@@ -231,6 +283,11 @@ class Processor:
                     "ON CONFLICT (station_id) DO UPDATE "
                     "SET last_seen = GREATEST(stations.last_seen, EXCLUDED.last_seen)",
                     [(s, dt(t)) for s, t in last.items()],
+                )
+            if groups["event"]:
+                cur.executemany(
+                    "INSERT INTO station_events (ts, station_id, kind, value, detail) VALUES (%s, %s, %s, %s, %s)",
+                    [(dt(ev.ts), ev.station_id, ev.kind, ev.value, ev.detail) for ev in groups["event"]],
                 )
             for s in groups["rover_status"]:
                 cur.execute(
@@ -286,6 +343,41 @@ class Processor:
                 )
                 n += cur.rowcount
         return n
+
+    def ack_station(self, ev: StationEventMsg) -> int:
+        """Joystick ack on a station: acknowledge its open alerts (current transaction)."""
+        with self.db.cursor() as cur:
+            cur.execute(
+                "UPDATE alerts SET acked_at = %s, acked_by = %s "
+                "WHERE station_id = %s AND acked_at IS NULL AND resolved_at IS NULL",
+                (dt(ev.ts), f"{ev.station_id} joystick", ev.station_id),
+            )
+            if cur.rowcount:
+                log.info("station %s acknowledged %d alert(s) from its joystick", ev.station_id, cur.rowcount)
+            return cur.rowcount
+
+    def publish_station_state(self) -> None:
+        """Retained open-alert count per station, for the station's LED."""
+        try:
+            with self.db.cursor() as cur:
+                cur.execute(
+                    """SELECT s.station_id, count(a.id),
+                              max(CASE a.severity WHEN 'critical' THEN 3 WHEN 'warning' THEN 2
+                                  WHEN 'info' THEN 1 END)
+                       FROM stations s LEFT JOIN alerts a ON a.station_id = s.station_id
+                            AND a.acked_at IS NULL AND a.resolved_at IS NULL
+                       GROUP BY s.station_id"""
+                )
+                rows = cur.fetchall()
+            self.db.rollback()
+        except psycopg.Error:
+            log.exception("station state query failed")
+            self._recover_db()
+            return
+        worst = {1: "info", 2: "warning", 3: "critical"}
+        for sid, n, rank in rows:
+            msg = StationStateMsg(open_alerts=n, worst=worst.get(rank))
+            self.mqtt.publish(topics.barn_state(sid), msg.model_dump_json(), qos=1, retain=True)
 
     def publish_alerts(self, saved: list[dict], resolved: int = 0) -> None:
         """Announce alert changes after they are committed."""

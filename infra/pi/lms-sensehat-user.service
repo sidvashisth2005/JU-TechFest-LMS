@@ -1,0 +1,14 @@
+# Barn Pi: Sense HAT -> MQTT as a systemd USER service (no sudo). Installed by lms-barn.sh.
+[Unit]
+Description=LMS barn station: Sense HAT temperature/humidity/pressure to MQTT
+# user units can't wait for network-online.target; the MQTT client keeps retrying instead
+
+[Service]
+WorkingDirectory=%h/lms
+EnvironmentFile=%h/lms/.env
+ExecStart=%h/lms-venv/bin/python -m barn.sensehat_pub --station ${BARN_STATION} --interval ${BARN_INTERVAL}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

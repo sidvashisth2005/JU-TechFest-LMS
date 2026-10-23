@@ -4,6 +4,7 @@ import { wsUrl } from "./api";
 export type LiveMessage =
   | ({ type: "vitals" } & Record<string, unknown>)
   | ({ type: "env" } & Record<string, unknown>)
+  | ({ type: "station_event" } & Record<string, unknown>)
   | ({ type: "alert" } & Record<string, unknown>)
   | ({ type: "rover_status" } & Record<string, unknown>)
   | { type: "hello" };

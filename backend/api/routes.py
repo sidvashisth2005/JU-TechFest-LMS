@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from backend.api import db
 from backend.api.auth import require_user
+from common.schemas import dew_point
 from ml.disease import predict as disease
 
 router = APIRouter(prefix="/api", tags=["herd"], dependencies=[Depends(require_user)])
@@ -167,13 +168,79 @@ def environment(station_id: str | None = None, hours: float = Query(24, gt=0, le
     points = db.rows(
         """SELECT station_id, extract(epoch FROM time_bucket(make_interval(secs => %s), ts)) AS ts,
                   round(avg(temp)::numeric, 2) AS temp, round(avg(humidity)::numeric, 1) AS humidity,
-                  round(avg(pressure)::numeric, 1) AS pressure, round(avg(thi)::numeric, 1) AS thi
+                  round(avg(pressure)::numeric, 1) AS pressure, round(avg(thi)::numeric, 1) AS thi,
+                  round(avg(tilt)::numeric, 1) AS tilt, round(max(vibration)::numeric, 3) AS vibration
            FROM env_readings
            WHERE ts > now() - make_interval(secs => %s) AND (%s::text IS NULL OR station_id = %s)
            GROUP BY 1, 2 ORDER BY 2""",
         (width, hours * 3600, station_id, station_id),
     )
+    for p in points:
+        p["dew_point"] = dew_point(_num(p["temp"]), _num(p["humidity"]))
     return {"bucket_seconds": width, "points": points}
+
+
+def _num(v) -> float | None:
+    return None if v is None else float(v)
+
+
+@router.get("/stations")
+def stations() -> list[dict]:
+    """Every barn station with its latest reading, 3 h pressure trend, open alerts and last events."""
+    rows = db.rows(
+        f"""
+        WITH latest AS (
+            SELECT DISTINCT ON (station_id) station_id, extract(epoch FROM ts) AS ts, temp, humidity,
+                   pressure, thi, tilt, vibration, heading, magnetic
+            FROM env_readings WHERE ts > now() - interval '7 days' ORDER BY station_id, ts DESC
+        ), past AS (
+            SELECT DISTINCT ON (station_id) station_id, pressure AS pressure_3h
+            FROM env_readings
+            WHERE ts BETWEEN now() - interval '3 hours 15 minutes' AND now() - interval '2 hours 45 minutes'
+                  AND pressure IS NOT NULL
+            ORDER BY station_id, ts
+        ), open_alerts AS (
+            SELECT station_id, count(*) AS n FROM alerts
+            WHERE station_id IS NOT NULL AND acked_at IS NULL AND resolved_at IS NULL GROUP BY station_id
+        ), hello AS (
+            SELECT DISTINCT ON (station_id) station_id, detail AS hello
+            FROM station_events WHERE kind = 'hello' ORDER BY station_id, ts DESC
+        ), gate AS (
+            SELECT DISTINCT ON (station_id) station_id, kind AS gate
+            FROM station_events WHERE kind IN ('gate_open', 'gate_closed') ORDER BY station_id, ts DESC
+        )
+        SELECT s.station_id, s.name, extract(epoch FROM s.last_seen) AS last_seen,
+               s.last_seen > now() - interval '{OFFLINE_AFTER}' AS online,
+               l.ts, l.temp, l.humidity, l.pressure, l.thi, l.tilt, l.vibration, l.heading, l.magnetic,
+               round((l.pressure - p.pressure_3h)::numeric, 1) AS pressure_trend_3h,
+               coalesce(o.n, 0) AS open_alerts, h.hello, g.gate
+        FROM stations s
+        LEFT JOIN latest l USING (station_id)
+        LEFT JOIN past p USING (station_id)
+        LEFT JOIN open_alerts o USING (station_id)
+        LEFT JOIN hello h USING (station_id)
+        LEFT JOIN gate g USING (station_id)
+        ORDER BY s.station_id
+        """
+    )
+    for r in rows:
+        r["dew_point"] = dew_point(_num(r["temp"]), _num(r["humidity"]))
+        r["pressure_trend_3h"] = _num(r["pressure_trend_3h"])
+    return rows
+
+
+@router.get("/stations/events")
+def station_events(
+    station_id: str | None = None,
+    hours: float = Query(24, gt=0, le=24 * 30),
+    limit: int = Query(50, ge=1, le=500),
+) -> list[dict]:
+    return db.rows(
+        """SELECT extract(epoch FROM ts) AS ts, station_id, kind, value, detail FROM station_events
+           WHERE ts > now() - make_interval(secs => %s) AND (%s::text IS NULL OR station_id = %s)
+           ORDER BY ts DESC LIMIT %s""",
+        (hours * 3600, station_id, station_id, limit),
+    )
 
 
 class Symptoms(BaseModel):

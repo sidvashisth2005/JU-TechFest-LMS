@@ -8,6 +8,8 @@ Works with the UNO backup collar (firmware/uno_bridge), an ESP32 collar on a USB
 prints every reading on serial too, so this is the no-Wi-Fi fallback) and the ESP-NOW
 gateway (firmware/gateway_espnow). Each JSON line {"animal_id": "...", "hr": ..., ...} is
 validated against common.schemas.VitalsMsg and published to lms/collar/<animal_id>/vitals.
+Lines with a station_id (the ESP8266 collar's DHT22 air reading) are EnvMsg and go to
+lms/barn/<station_id>/env.
 Status lines and garbage are logged and skipped. Values are passed through unchanged: no
 offsets, no substitutes for missing readings.
 """
@@ -21,7 +23,7 @@ from pydantic import ValidationError
 
 from barn.mqtt import connect
 from common import topics
-from common.schemas import VitalsMsg
+from common.schemas import EnvMsg, VitalsMsg
 
 log = logging.getLogger("serial_bridge")
 
@@ -42,7 +44,7 @@ def find_port() -> str | None:
     return None
 
 
-def parse_line(line: str, default_animal: str | None) -> VitalsMsg | None:
+def parse_line(line: str, default_animal: str | None) -> VitalsMsg | EnvMsg | None:
     line = line.strip()
     if not line.startswith("{"):
         return None
@@ -54,9 +56,11 @@ def parse_line(line: str, default_animal: str | None) -> VitalsMsg | None:
     if "status" in data or "error" in data:
         log.info("device: %s", data)
         return None
-    data.setdefault("animal_id", default_animal)
-    data["ts"] = time.time()  # the UNO has no clock
+    data["ts"] = time.time()  # the boards have no clock
     try:
+        if "station_id" in data:
+            return EnvMsg.model_validate(data)
+        data.setdefault("animal_id", default_animal)
         return VitalsMsg.model_validate(data)
     except ValidationError as e:
         log.warning("rejected %s: %s", line[:120], e.errors()[0]["msg"])
@@ -86,7 +90,10 @@ def main():
                     if not raw:
                         continue
                     msg = parse_line(raw, args.animal)
-                    if msg:
+                    if isinstance(msg, EnvMsg):
+                        client.publish(topics.barn_env(msg.station_id), msg.model_dump_json(exclude_none=True), qos=1)
+                        log.info("%s temp=%s humidity=%s", msg.station_id, msg.temp, msg.humidity)
+                    elif msg:
                         client.publish(
                             topics.collar_vitals(msg.animal_id), msg.model_dump_json(exclude_none=True), qos=1
                         )

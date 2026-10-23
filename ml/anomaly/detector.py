@@ -1,6 +1,7 @@
 """Streaming anomaly detector used both by the live processor and by offline evaluation.
 
-Feed it messages in time order (`on_vitals`, `on_env`, `tick`). It returns AlertMsg objects.
+Feed it messages in time order (`on_vitals`, `on_env`, `on_station_event`, `tick`). It returns
+AlertMsg objects.
 
 How it decides:
 1. Glitch filter - each signal is the median of the last few readings, so one bad sample
@@ -20,7 +21,7 @@ import statistics
 from collections import deque
 from dataclasses import dataclass, field
 
-from common.schemas import AlertMsg, EnvMsg, VitalsMsg, thi
+from common.schemas import AlertMsg, EnvMsg, StationEventMsg, VitalsMsg, thi
 
 MIN = 60.0
 HOUR = 3600.0
@@ -51,6 +52,14 @@ class Config:
     thi_moderate: float = 79
     thi_severe: float = 89
     thi_clear: float = 70
+    # environment (air pressure): a fall of 3 hPa in 3 h is "falling rapidly" in weather reports
+    pressure_window: float = 3 * HOUR
+    pressure_min_span: float = 1.5 * HOUR  # need this much history before judging the trend
+    storm_drop: float = 3.0
+    storm_clear: float = 1.5
+    # barn station (Sense HAT IMU)
+    knock_clear: float = 30 * MIN  # a bump alert closes itself after this long without bumps
+    station_offline_after: float = 15 * MIN
     # device health
     offline_after: float = 10 * MIN
     battery_low: float = 3.5
@@ -119,6 +128,9 @@ class Detector:
         self._herd_cache: tuple[float, float | None, float | None] = (-1e18, None, None)
         self._herd_act_cache: tuple[float, float | None, float | None] = (-1e18, None, None)
         self.thi_level: dict[str, str | None] = {}
+        self.pressure: dict[str, deque] = {}  # station -> (ts, hPa) over pressure_window
+        self.station_seen: dict[str, float] = {}
+        self.last_knock: dict[str, float] = {}
         # (subject, kind, ts) of alerts that cleared by themselves; the caller drains this
         self.resolved: list[tuple[str, str, float]] = []
 
@@ -165,6 +177,66 @@ class Detector:
         return out
 
     def on_env(self, e: EnvMsg) -> list[AlertMsg]:
+        out: list[AlertMsg] = []
+        if (e.station_id, "sensor_offline") in self.open:
+            out += self._clear(e.station_id, "sensor_offline", e.ts, station=True)
+        self.station_seen[e.station_id] = max(self.station_seen.get(e.station_id, 0.0), e.ts)
+        if e.pressure is not None:
+            out += self._check_pressure(e)
+        return out + self._check_thi(e)
+
+    def _check_pressure(self, e: EnvMsg) -> list[AlertMsg]:
+        cfg = self.cfg
+        q = self.pressure.setdefault(e.station_id, deque())
+        q.append((e.ts, e.pressure))
+        while q and q[0][0] < e.ts - cfg.pressure_window:
+            q.popleft()
+        if q[-1][0] - q[0][0] < cfg.pressure_min_span:
+            return []
+        drop = max(p for _, p in q) - e.pressure
+        if drop >= cfg.storm_drop:
+            hours = cfg.pressure_window / HOUR
+            return self._raise(
+                e.station_id,
+                "storm_risk",
+                "warning",
+                e.ts,
+                f"Air pressure falling fast ({drop:.1f} hPa in {hours:.0f} h): storm or heavy rain likely",
+                drop,
+                station=True,
+            )
+        if drop < cfg.storm_clear:
+            return self._clear(e.station_id, "storm_risk", e.ts, station=True)
+        return []
+
+    def on_station_event(self, ev: StationEventMsg) -> list[AlertMsg]:
+        """Knocks, tilt and gate events from a barn station's motion sensors."""
+        sid, ts = ev.station_id, ev.ts
+        if ev.kind == "knock":
+            self.last_knock[sid] = ts
+            g = f" ({ev.value:.1f} g)" if ev.value is not None else ""
+            return self._raise(sid, "station_bumped", "info", ts, f"Barn station was bumped{g}", ev.value, station=True)
+        if ev.kind == "tilted":
+            deg = f" {ev.value:.0f} deg" if ev.value is not None else ""
+            return self._raise(
+                sid,
+                "station_tilted",
+                "warning",
+                ts,
+                f"Barn station tilted{deg}: knocked over or loose?",
+                ev.value,
+                station=True,
+            )
+        if ev.kind == "level":
+            return self._clear(sid, "station_tilted", ts, station=True)
+        if ev.kind == "gate_open":
+            mins = f" for {ev.value / MIN:.0f} min" if ev.value else ""
+            return self._raise(sid, "gate_open", "warning", ts, f"Barn gate open{mins}", ev.value, station=True)
+        if ev.kind == "gate_closed":
+            return self._clear(sid, "gate_open", ts, station=True)
+        return []
+
+    def _check_thi(self, e: EnvMsg) -> list[AlertMsg]:
         cfg = self.cfg
         index = thi(e.temp, e.humidity)
         if index is None:
@@ -220,6 +292,15 @@ class Detector:
                 out += self._raise(
                     animal_id, "sensor_offline", "warning", now, f"No data from collar for {mins:.0f} min"
                 )
+        for sid, seen in self.station_seen.items():
+            if now - seen > self.cfg.station_offline_after:
+                mins = (now - seen) / MIN
+                out += self._raise(
+                    sid, "sensor_offline", "info", now, f"No data from barn station for {mins:.0f} min", station=True
+                )
+        for sid, t in self.last_knock.items():
+            if (sid, "station_bumped") in self.open and now - t > self.cfg.knock_clear:
+                out += self._clear(sid, "station_bumped", now, station=True)
         if self.scorer is not None and ref - self._model_at >= self.cfg.model_every:
             self._model_at = ref
             out += self._check_model(ref)

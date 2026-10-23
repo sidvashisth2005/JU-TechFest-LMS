@@ -1,5 +1,5 @@
 # Start the whole LMS backend on this laptop, each part as a hidden background process.
-#   .\infra\run_all.ps1                 services + ingest + processor + notifier + API
+#   .\infra\run_all.ps1                 services + ingest + processor + notifier + API + Pi watcher
 #   .\infra\run_all.ps1 -Simulator      ...plus the 50-cow simulator (48 h backfill + demo events)
 #   .\infra\run_all.ps1 -MockRover      ...plus a laptop rover (mock motors, synthetic camera)
 #   .\infra\run_all.ps1 -Tunnel         ...plus a public https link via Cloudflare quick tunnel
@@ -30,6 +30,8 @@ Start-Part "ingest" @("-m", "backend.workers.ingest")
 Start-Part "processor" @("-m", "backend.workers.processor")
 Start-Part "notifier" @("-m", "backend.workers.notifier")
 Start-Part "api" @("-m", "uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000")
+# hears the Pis' IP beacons and keeps .env / their MQTT_HOST pointed at the right addresses
+Start-Part "piwatch" @("infra\pi_watch.py", "--update")
 if ($Simulator) {
     Start-Part "simulator" @("-m", "simulator.run", "live", "--backfill-hours", "48", "--backfill-interval", "120",
         "--backfill-pause", "0", "--demo", "--interval", "15")

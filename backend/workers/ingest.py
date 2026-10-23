@@ -18,7 +18,7 @@ from pydantic import ValidationError
 
 from backend.config import STREAM_IN, settings
 from common import topics
-from common.schemas import DetectionsMsg, EnvMsg, RoverStatusMsg, VitalsMsg
+from common.schemas import DetectionsMsg, EnvMsg, RoverStatusMsg, StationEventMsg, VitalsMsg
 
 log = logging.getLogger("ingest")
 
@@ -26,6 +26,7 @@ log = logging.getLogger("ingest")
 ROUTES = {
     topics.COLLAR_VITALS_SUB: ("vitals", VitalsMsg, "animal_id"),
     topics.BARN_ENV_SUB: ("env", EnvMsg, "station_id"),
+    topics.BARN_EVENT_SUB: ("event", StationEventMsg, "station_id"),
     topics.ROVER_STATUS_SUB: ("rover_status", RoverStatusMsg, "rover_id"),
     topics.ROVER_DETECTIONS_SUB: ("detections", DetectionsMsg, "rover_id"),
 }

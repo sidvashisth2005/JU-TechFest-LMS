@@ -36,3 +36,28 @@ def test_thi_known_values():
     assert thi(20, 50) < 72
     assert thi(None, 50) is None
     assert EnvMsg(station_id="barn1", temp=30, humidity=70).thi == pytest.approx(81.4, abs=0.1)
+
+
+def test_dew_point_known_values():
+    from common.schemas import dew_point
+
+    assert dew_point(25, 50) == 13.9
+    assert dew_point(20, 100) == 20.0
+    assert dew_point(None, 50) is None and dew_point(25, 0) is None
+
+
+def test_station_event_and_state_messages():
+    from common import topics
+    from common.schemas import StationEventMsg, StationStateMsg
+
+    assert topics.device_id(topics.barn_event("barn1")) == "barn1"
+    assert topics.barn_state("barn1") == "lms/barn/barn1/state"
+    ev = StationEventMsg(station_id="barn1", kind="knock", value=1.1)
+    assert ev.kind == "knock"
+    assert StationStateMsg().open_alerts == 0
+    try:
+        StationEventMsg(station_id="barn1", kind="explode")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("unknown event kind accepted")

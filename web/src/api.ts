@@ -101,6 +101,30 @@ export interface EnvPoint {
   humidity: number | null;
   pressure: number | null;
   thi: number | null;
+  dew_point?: number | null;
+  tilt?: number | null;
+  vibration?: number | null;
+  heading?: number | null;
+  magnetic?: number | null;
+}
+
+/** A barn station (Sense HAT Pi) with its latest reading; from /api/stations. */
+export interface StationInfo extends EnvPoint {
+  name: string | null;
+  last_seen: number | null;
+  online: boolean;
+  pressure_trend_3h: number | null;
+  open_alerts: number;
+  hello: string | null; // "ip 10.0.0.5" from the station's last start-up
+  gate: "gate_open" | "gate_closed" | null;
+}
+
+export interface StationEvent {
+  ts: number;
+  station_id: string;
+  kind: "knock" | "tilted" | "level" | "gate_open" | "gate_closed" | "ack" | "hello";
+  value: number | null;
+  detail: string | null;
 }
 
 export interface Summary {
