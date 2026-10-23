@@ -67,3 +67,22 @@ The hackathon rover followed a green marker and the web app used a Roboflow *per
 Training data: 3,638 images (1,968 COCO cow, 470 Open Images cattle, 1,200 negatives). 60 epochs at 512 px took 66 minutes on the RTX 3050 laptop GPU; the thermal guard log shows a peak of 64 °C and no pauses. The exported ONNX model (320 px) runs at about 10 ms per frame on the laptop CPU through `rover/vision.py`, and finds cows on grass where the legacy green-marker tracker locks onto the field. Pi 4 speed (ONNX via OpenCV and NCNN) is to be measured when the hardware is back.
 
 Reproduce (in WSL): `bash ml/detection/run_pipeline.sh`, or step by step `python -m ml.detection.prepare_data`, `python -m ml.detection.train`, `python -m ml.detection.export --weights ~/lms-runs/cow-yolo11n/weights/best.pt`. Results are written to `~/lms-runs/cow-yolo11n/report.json`.
+
+## 4. Person detection (prepared, not trained yet)
+
+The rover must recognise people: to stop when one is close (the ultrasonic only looks straight ahead) and never to follow one. The plan is a single two-class model, **cow + person**, so the Pi 4 runs one detector pass per frame instead of two.
+
+**Label quality.** A person visible in an image but missing from its labels teaches the model that people are background, which is the dangerous error for a rover. So:
+- COCO labels every person in every image; COCO images keep all their cow and person boxes, and only COCO images are used for validation.
+- Open Images cattle photos often show farmers without person boxes. They are used for training only, after `pseudo_label_persons.py` fills in people with a large pretrained detector (YOLO11x, confidence ≥ 0.5, inference only).
+
+**Dataset** (`ml/detection/prepare_cow_person.py`): COCO train images with cows, farm scenes (people with horses/sheep/cows), a sample of images with people, and animal-only negatives; COCO validation cows plus a sample of people; Open Images V7 cattle. Built on 2026-10-10: training 5,926 images (5,404 COCO + 522 Open Images), validation 463 COCO images; 9,551 cow and 16,752 person boxes from the original labels, plus 254 person boxes pseudo-labelled on 59 of the 522 Open Images photos. Counts are in the dataset's `manifest.json`.
+
+**Rover side (done):** `rover/safety.py` blocks forward motion when a confident person box is taller than 35 % of the frame (backing away and turning stay allowed); `rover/controller.py` never picks a person as the follow target. Works with any model that outputs a `person` class.
+
+**To train later** (in WSL, gentle settings with the thermal guard):
+```
+bash ml/detection/run_cow_person_pipeline.sh data    # already run: dataset + pseudo-labels
+bash ml/detection/run_cow_person_pipeline.sh train   # 80 epochs, then export to ml/detection/models/cow_person.*
+```
+The report will give per-class precision/recall for the stock COCO model and the fine-tuned one on the same validation images; person recall is the number that matters most.

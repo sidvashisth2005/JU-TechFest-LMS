@@ -93,6 +93,7 @@ class Rover:
         h, w = (frame.shape[:2]) if frame is not None else (480, 640)
         if frame is not None:
             dets = self.tracker.update(self.detector.detect(frame))
+        self.safety.update_people(dets, h)
         with self.lock:
             left, right = self.controller.step(dets, w, h, now)
         left, right = self.safety.filter(left, right, now, self.battery)
@@ -128,7 +129,7 @@ class Rover:
                 mode=self.controller.mode,
                 battery=self.battery,
                 distance_cm=self.safety.distance,
-                blocked=self.safety.reason == "obstacle ahead" or self.safety.blocked(time.time()),
+                blocked=self.safety.reason is not None or self.safety.blocked(time.time()) or self.safety.person_close,
                 left_dps=round(self.left, 1),
                 right_dps=round(self.right, 1),
             ).model_dump(),

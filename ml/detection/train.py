@@ -9,8 +9,9 @@ Laptop protection (RTX 3050 Laptop, no settable power limit):
 - small batch, 2 data-loader workers, 4 CPU threads
 Temperatures are logged to <run>/thermal.csv.
 
-Also scores the stock COCO-pretrained YOLO11n on the same validation images (its "cow"
-class) so the fine-tuned model is compared against a real baseline.
+Also scores the stock COCO-pretrained YOLO11n on the same validation images (its "cow" class,
+plus "person" for the cow+person dataset) so the fine-tuned model is compared against a real
+baseline. Works for both the one-class cow dataset and the two-class cow+person dataset.
 """
 
 import argparse
@@ -90,7 +91,8 @@ def coco_view(data_dir: Path) -> Path:
             shutil.copytree(src, dst)
     for cache in view.rglob("*.cache"):
         cache.unlink()
-    names = "\n".join(f"  {i}: c{i}" for i in range(80)).replace(f"  {COCO_COW}: c{COCO_COW}", f"  {COCO_COW}: cow")
+    known = {0: "person", COCO_COW: "cow"}
+    names = "\n".join(f"  {i}: {known.get(i, f'c{i}')}" for i in range(80))
     yaml = view / "data.yaml"
     yaml.write_text(f"path: {view}\ntrain: images/val\nval: images/val\nnames:\n{names}\n")
     return yaml
@@ -98,12 +100,21 @@ def coco_view(data_dir: Path) -> Path:
 
 def score(model: YOLO, data: Path, imgsz: int, classes=None) -> dict:
     m = model.val(data=str(data), imgsz=imgsz, batch=8, workers=2, classes=classes, plots=False, verbose=False)
-    return {
+    out = {
         "mAP50": round(float(m.box.map50), 4),
         "mAP50_95": round(float(m.box.map), 4),
         "precision": round(float(m.box.mp), 4),
         "recall": round(float(m.box.mr), 4),
     }
+    if len(m.box.ap_class_index) > 1:  # per-class numbers (person recall matters most for safety)
+        for i, c in enumerate(m.box.ap_class_index):
+            p, r, ap50, _ = m.box.class_result(i)
+            out[m.names[int(c)]] = {
+                "mAP50": round(float(ap50), 4),
+                "precision": round(float(p), 4),
+                "recall": round(float(r), 4),
+            }
+    return out
 
 
 def main():
@@ -125,8 +136,10 @@ def main():
     run_dir = Path(args.project) / args.name
     report = {"args": vars(args), "started": time.strftime("%Y-%m-%d %H:%M")}
 
-    print("== baseline: stock COCO YOLO11n, class 'cow' ==", flush=True)
-    report["baseline"] = score(YOLO(args.model), coco_view(data_dir), args.imgsz, classes=[COCO_COW])
+    manifest = data_dir / "manifest.json"
+    coco_ids = sorted(json.loads(manifest.read_text())["coco_ids"].values()) if manifest.exists() else [COCO_COW]
+    print(f"== baseline: stock COCO {args.model}, COCO classes {coco_ids} ==", flush=True)
+    report["baseline"] = score(YOLO(args.model), coco_view(data_dir), args.imgsz, classes=coco_ids)
     print(report["baseline"], flush=True)
     if args.baseline_only:
         path = run_dir / "report.json"

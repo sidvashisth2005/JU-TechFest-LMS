@@ -35,6 +35,9 @@ class RoverConfig:
     close_echo_window_s: float = 1.0  # "no echo" right after a close reading means too close, not clear
     manual_timeout_s: float = 0.5  # manual drive stops if commands stop arriving (watchdog)
     battery_min_v: float = 9.0  # refuse to drive below this
+    # a person whose box is taller than this fraction of the frame is close: no forward motion
+    person_stop_frac: float = 0.35
+    person_min_conf: float = 0.4
 
     loop_hz: float = 15
     status_publish_s: float = 1.0

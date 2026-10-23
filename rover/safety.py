@@ -1,8 +1,12 @@
-"""Last word on every motor command: obstacle stop, low battery stop.
+"""Last word on every motor command: obstacle stop, person stop, low battery stop.
 
 The EV3 ultrasonic returns "no echo" (None here) both when nothing is in range and when an
 object is closer than ~3 cm. On the bench a hand at 3.6 cm read 255 on the next sample.
 So "no echo" right after a close reading counts as blocked, not as a clear path.
+
+People: when the camera sees a person whose box is taller than `person_stop_frac` of the
+frame (i.e. close), forward motion is blocked even if the ultrasonic, which only looks
+straight ahead, sees nothing.
 """
 
 from rover.config import RoverConfig
@@ -13,12 +17,22 @@ class Safety:
         self.cfg = cfg
         self.distance: float | None = None
         self._last_valid: tuple[float, float] | None = None  # (cm, ts)
+        self.person_close = False
         self.reason: str | None = None
 
     def update(self, distance_cm: float | None, now: float) -> None:
         self.distance = distance_cm
         if distance_cm is not None:
             self._last_valid = (distance_cm, now)
+
+    def update_people(self, dets, frame_h: int) -> None:
+        """Pass this frame's detections; any confident, close person blocks forward motion."""
+        self.person_close = any(
+            d.label == "person"
+            and d.confidence >= self.cfg.person_min_conf
+            and d.height / frame_h >= self.cfg.person_stop_frac
+            for d in dets
+        )
 
     def blocked(self, now: float) -> bool:
         stop = self.cfg.stop_distance_cm
@@ -36,8 +50,8 @@ class Safety:
             self.reason = f"battery low ({battery_v:.1f} V)"
             return 0.0, 0.0
         forward = (left + right) / 2
-        if forward > 0 and self.blocked(now):
+        if forward > 0 and (self.blocked(now) or self.person_close):
             turn = (left - right) / 2  # keep turning (to steer away); drop the forward part
-            self.reason = "obstacle ahead"
+            self.reason = "person close" if self.person_close else "obstacle ahead"
             return turn, -turn
         return left, right
