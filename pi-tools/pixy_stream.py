@@ -14,11 +14,14 @@ Needs the Pixy2 SWIG module built with the LMS additions
 """
 
 import argparse
+import json
+import os
 import signal
 import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import cv2
@@ -26,6 +29,27 @@ import numpy as np
 import pixy
 
 W, H = 316, 208
+SERVO_STEP = 15  # servo units per step when moving the pan-tilt
+SERVO_STEP_DELAY = 0.03  # seconds between steps
+SERVO_FILE = Path.home() / ".pixy_servo.json"
+MAX_GRAB_FAILURES = 60  # ~3 s of failed frame grabs -> exit and let the respawn loop reconnect
+
+
+def load_servo() -> tuple[int, int]:
+    """Last commanded pan/tilt, so a restart doesn't jerk the camera back to centre."""
+    try:
+        d = json.loads(SERVO_FILE.read_text())
+        return int(d["pan"]), int(d["tilt"])
+    except (OSError, ValueError, KeyError):
+        return 500, 500
+
+
+def save_servo(pan: int, tilt: int) -> None:
+    try:
+        SERVO_FILE.write_text(json.dumps({"pan": pan, "tilt": tilt}))
+    except OSError:
+        pass
+
 
 PAGE = b"""<!doctype html>
 <html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pixy2 live</title>
@@ -35,8 +59,33 @@ img{max-width:100%;margin-top:12px}label{display:inline-block;margin:10px}</styl
 <label>Brightness <input type="range" min="0" max="255" id="b"
  onchange="fetch('/set?brightness='+this.value).then(r=>r.text()).then(t=>document.getElementById('v').textContent=t)"></label>
 <span id="v"></span>
+<div style="margin:8px">Pan-tilt:
+ <button onclick="mv(0,60)">Up</button> <button onclick="mv(0,-60)">Down</button>
+ <button onclick="mv(-60,0)">Left</button> <button onclick="mv(60,0)">Right</button>
+ <button onclick="fetch('/servo?pan=500&tilt=500').then(r=>r.text()).then(s)">Center</button>
+ <span id="sv"></span></div>
 <script>fetch('/set').then(r=>r.text()).then(t=>{document.getElementById('v').textContent=t;
-document.getElementById('b').value=parseInt(t.split('=')[1])})</script></body></html>"""
+document.getElementById('b').value=parseInt(t.split('=')[1])});
+function s(t){document.getElementById('sv').textContent=t}
+function mv(dp,dt){fetch('/servo?dpan='+dp+'&dtilt='+dt).then(r=>r.text()).then(s)}
+fetch('/servo').then(r=>r.text()).then(s);
+// arrow keys move the pan-tilt (Shift = fine steps), C centres it
+document.addEventListener('keydown',e=>{const k=e.shiftKey?20:60;
+ const m={ArrowUp:[0,k],ArrowDown:[0,-k],ArrowLeft:[-k,0],ArrowRight:[k,0]}[e.key];
+ if(m){e.preventDefault();mv(m[0],m[1])}
+ else if(e.key==='c'||e.key==='C'){fetch('/servo?pan=500&tilt=500').then(r=>r.text()).then(s)}});
+// focus helper: higher = sharper; turn the lens slowly and stop at the highest number
+let best=0;setInterval(()=>fetch('/focus').then(r=>r.text()).then(t=>{const v=+t;best=Math.max(best,v);
+ document.getElementById('f').textContent=v;document.getElementById('fb').textContent=best;
+ document.getElementById('fbar').style.width=Math.min(100,best?100*v/best:0)+'%'}),400);
+</script><p style="color:#888">Keys: arrows move the camera (Shift = fine), C = centre</p>
+<div style="margin:10px auto;max-width:420px">Focus score <b id="f" style="font-size:28px;color:#7f7">0</b>
+ &nbsp; best <b id="fb">0</b> <button onclick="best=0">reset best</button>
+ <div style="background:#333;height:12px;border-radius:6px;margin-top:6px"><div id="fbar"
+ style="background:#7f7;height:12px;width:0;border-radius:6px"></div></div>
+ <p style="color:#888">Point at printed text 50 cm away and turn the lens slowly:
+ the bar is full at the sharpest point seen.</p></div>
+</body></html>"""
 
 
 class Camera:
@@ -53,6 +102,8 @@ class Camera:
         self.scale = scale
         self.average = average
         self.lock = threading.Lock()  # serialises all USB calls
+        self.pan, self.tilt = load_servo()
+        self.focus: float | None = None
         self._buf = bytearray(W * H)
         self._acc = None
         self._wb = None
@@ -69,6 +120,26 @@ class Camera:
                 pixy.cam_set_u8("cam_setBrightness", value)
                 pixy.video_stop()
             return pixy.cam_get("cam_getBrightness")
+
+    def servo(self, pan=None, tilt=None, dpan=0, dtilt=0):
+        """Pan-tilt kit on the Pixy2 servo port, positions 0..1000 (500 = centre).
+
+        On this rover the kit is wired S0 = tilt (higher = up) and S1 = pan (higher = right).
+        """
+        with self.lock:
+            target_pan = max(0, min(1000, (self.pan if pan is None else pan) + dpan))
+            target_tilt = max(0, min(1000, (self.tilt if tilt is None else tilt) + dtilt))
+            pixy.video_resume()
+            # ramp in small steps: a sudden jump draws a current spike through the Pixy's USB
+            # supply, which resets the Pixy (seen on the bench: USB device re-enumerated)
+            while (self.pan, self.tilt) != (target_pan, target_tilt):
+                self.pan += max(-SERVO_STEP, min(SERVO_STEP, target_pan - self.pan))
+                self.tilt += max(-SERVO_STEP, min(SERVO_STEP, target_tilt - self.tilt))
+                pixy.set_servos(self.tilt, self.pan)
+                time.sleep(SERVO_STEP_DELAY)
+            pixy.video_stop()
+            save_servo(self.pan, self.tilt)
+            return self.pan, self.tilt
 
     def _grab(self):
         with self.lock:
@@ -113,11 +184,24 @@ class Camera:
     def _loop(self):
         # grab and process in one thread: the SWIG calls hold the GIL, so a
         # separate grab thread would starve processing
+        failures = 0
         while self._running:
             raw = self._grab()
             if raw is None:
+                failures += 1
+                if failures > MAX_GRAB_FAILURES:
+                    # the Pixy reset (USB re-enumerated) and this handle is dead; exit so the
+                    # control script's respawn loop starts a fresh process that reconnects
+                    print("Pixy stopped answering; exiting for a clean restart", flush=True)
+                    os._exit(3)
                 time.sleep(0.05)
                 continue
+            failures = 0
+            # focus score: variance of the Laplacian over the central area, measured before any
+            # sharpening so it reflects the lens, smoothed so it doesn't jump around
+            gray = cv2.cvtColor(raw, cv2.COLOR_BayerRG2GRAY)[H // 4 : 3 * H // 4, W // 4 : 3 * W // 4]
+            score = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+            self.focus = score if self.focus is None else 0.7 * self.focus + 0.3 * score
             ok, jpg = cv2.imencode(".jpg", self._process(raw), [cv2.IMWRITE_JPEG_QUALITY, 85])
             if ok:
                 with self._cond:
@@ -152,6 +236,8 @@ def make_handler(cam):
             url = urlparse(self.path)
             if url.path == "/":
                 self._send(PAGE, "text/html")
+            elif url.path == "/focus":
+                self._send(f"{cam.focus or 0:.0f}".encode(), "text/plain")
             elif url.path == "/snapshot.jpg":
                 self._send(cam.wait_frame() or b"", "image/jpeg")
             elif url.path == "/set":
@@ -160,6 +246,17 @@ def make_handler(cam):
                 if value is not None:
                     value = max(0, min(255, value))
                 self._send(f"brightness={cam.brightness(value)}".encode(), "text/plain")
+            elif url.path == "/servo":
+                q = parse_qs(url.query)
+
+                def arg(k, default=None):
+                    return int(q[k][0]) if k in q else default
+
+                if any(k in q for k in ("pan", "tilt", "dpan", "dtilt")):
+                    pan, tilt = cam.servo(arg("pan"), arg("tilt"), arg("dpan", 0), arg("dtilt", 0))
+                else:
+                    pan, tilt = cam.pan, cam.tilt
+                self._send(f"pan={pan} tilt={tilt}".encode(), "text/plain")
             elif url.path == "/stream.mjpg":
                 self.send_response(200)
                 self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")

@@ -3,11 +3,12 @@
 ## ⏸ PAUSED HERE — 2026-10-09 (hardware). Software phase S0–S12 DONE on 2026-10-10 — only hardware steps remain
 **Hardware status:** Phase 0–2 done, motors + ultrasonic + Pixy2 camera tested (see checklist). Lab closed, so components (Pi, BrickPi, motors, sensors, Pixy) are NOT with the user right now. Pi is off — don't try to SSH until the user says hardware is back.
 
-**Last hardware step in progress:** Pixy2 lens focus (image totally blurry even at 60 cm; user to rotate the lens while watching `http://localhost:8000`).
+**Hardware session 2026-10-10 (done):** Pi on same IP 10.77.218.209; new monorepo deployed to `~/lms-rover` via `git archive | ssh ... tar -x` (repo is private; no GitHub creds on the Pi); rover deps installed in `~/lms-venv`. Pixy2 **focused** (focus score 7 → ~450). Pixy sits on a **pan-tilt servo kit wired S0 = tilt (higher = up), S1 = pan (higher = right)**; the stream page has buttons + arrow keys, ramped moves, position saved in `~/.pixy_servo.json`. A sudden servo jump reset the Pixy over USB once → streamer now exits on 3 s of failed grabs and `pixy_stream_ctl.sh` respawns it (consider a powered USB hub / separate 5 V for the servos). YOLO cow ONNX on the Pi 4 CPU: 121 ms/frame (~8 fps) with 4 threads. Rover server ran on real BrickPi + Pixy2 + YOLO: camera ~34 fps, control loop ~5 Hz, ultrasonic S2 OK (12–82 cm; reads None = no echo when nothing in front), battery ~10.6 V. Laptop `.env` ROVER_URL now = http://10.77.218.209:8080 and the dashboard Rover page shows the Pi's live video. Motors were NOT connected this session.
+**Next hardware step:** connect motors (MC right, MD left), lift tracks, drive from dashboard Rover page; calibrate `--turn-sign`/`drive_sign`; then follow mode.
 
 **When hardware is back, do in this order:**
-1. Same Wi-Fi ("Siddhant Vashisth 11"), boot Pi, check IP (`hostname -I`), SSH test, update IP below if changed.
-2. Finish Pixy2 focus (`~/lms-tools/pixy_stream_ctl.sh start` + tunnel `ssh -N -L 8000:localhost:8000 pi@<ip>`).
+1. Same Wi-Fi ("Siddhant Vashisth 11"), boot Pi, check IP (`hostname -I`), SSH test, update IP below if changed. (Phone hotspot may change subnet — offered Tailscale for a fixed address.)
+2. ~~Pixy2 focus~~ done 2026-10-10. Redeploy code after changes: `git archive --format=tar HEAD | ssh pi@<ip> 'tar -x -C ~/lms-rover'`.
 3. Sense HAT test (needs BrickPi removed or a GPIO splitter) → then `barn/sensehat_pub.py` from the new monorepo.
 4. Ask MAX30102 board type (DFRobot SEN0344 vs generic) → flash UNO sketch → serial→MQTT bridge → dashboard.
 5. Deploy new `rover/` server to the Pi, run with real motors/ultrasonic (⚠️ lift tracks first), benchmark YOLO NCNN on Pi.
