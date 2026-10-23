@@ -161,7 +161,10 @@ def install(user: str, addr: str) -> None:
     with tarfile.open(fileobj=buf, mode="w") as t:
         t.add(ROOT / "infra" / "pi", arcname="infra/pi", filter=lambda i: None if "__pycache__" in i.name else i)
     tar = buf.getvalue()
-    subprocess.run([*SSH, f"{user}@{addr}", f"mkdir -p {folder} && tar -x -C {folder}"], input=tar, check=True)
+    # sync: a power cut soon after copying leaves unsynced files empty on the SD card
+    sh_files = f"{folder}/infra/pi/*.sh"
+    unpack = f"mkdir -p {folder} && tar -x -C {folder} && sed -i 's/\\r$//' {sh_files} && chmod +x {sh_files} && sync"
+    subprocess.run([*SSH, f"{user}@{addr}", unpack], input=tar, check=True)
     # beacon: user service, no sudo; Telegram settings go over stdin, never on a command line
     telegram = "".join(f"{k}={get_env(k)}\n" for k in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID") if get_env(k))
     r = sh(

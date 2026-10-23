@@ -24,4 +24,5 @@ fi
 
 systemctl daemon-reload
 systemctl enable lms-boot-ip.service
+sync  # survive a power cut right after installing
 echo "installed: lms-boot-ip runs at every boot (journalctl -u lms-boot-ip)"

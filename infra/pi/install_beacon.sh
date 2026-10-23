@@ -23,4 +23,5 @@ loginctl enable-linger "$USER"
 systemctl --user daemon-reload
 systemctl --user enable lms-beacon.service
 systemctl --user restart lms-beacon.service
+sync  # survive a power cut right after installing (unsynced files come back empty)
 echo "lms-beacon: $(systemctl --user is-active lms-beacon), boot: $(systemctl --user is-enabled lms-beacon)"

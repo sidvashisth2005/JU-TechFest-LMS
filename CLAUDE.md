@@ -149,7 +149,7 @@ C: has only ~10 GB free. Code, venvs, datasets, model runs, caches → D: only. 
 - OS: fresh Raspberry Pi OS 64-bit desktop, **Debian 13 Trixie** (not Bookworm), aarch64. 16 GB SD (~7.9 GB free at start). Pi 4B Rev 1.1, 4 GB RAM.
 - Pi hostname: `lmspi` — but `lmspi.local` does NOT resolve from the laptop; use the IP.
 - Wi-Fi: both on "Siddhant Vashisth 11" (10.77.218.x). Laptop sometimes joins "Galaxy A16 5G 9365" instead → Pi unreachable; check laptop Wi-Fi first.
-- Pi IP: 10.207.184.209 on hotspot "Siddhant Vashisth" (2026-10-21; was 10.77.218.209 on "Siddhant Vashisth 11"). `lmspi` resolves from the laptop on this network. Host key unchanged.
+- Pi IP: 10.143.195.28 on hotspot "Siddhant Vashisth" (2026-10-23; was 10.207.184.209 on 10-21). Beacon + lms-boot-ip installed (2026-10-23), so the IP is now found automatically (piwatch / Telegram). `lmspi` resolves from the laptop on this network. Host key unchanged.
 - Pi username: pi
 - **Second Pi (2026-10-23)**: Pi 4B Rev 1.1, 4 GB, Trixie aarch64, hostname/user **rpi-1** (Imager cloud-init card, not ours originally), 14 GB SD (4.9 GB free). IP **10.143.195.209** on hotspot "Siddhant Vashisth" (subnet changes per hotspot session). Wi-Fi + laptop SSH key added offline via a one-shot `systemd.run` script on bootfs (self-removed). SSH `ssh -o BatchMode=yes rpi-1@10.143.195.209`. sudo still needs password. SPI off, I2C on. Has `~/smart_library` (someone else's project?). Laptop auto-rejoins "Galaxy A16 5G 9365" — check SSID first.
 - SSH: `ssh -o BatchMode=yes pi@10.77.218.209 "<cmd>"` works without password. Passwordless sudo set via `/etc/sudoers.d/010_pi-nopasswd`.
