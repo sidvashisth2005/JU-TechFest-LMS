@@ -123,6 +123,9 @@ When everything passes: reassemble, then run `Rover/picam_motor_Auto&manual-move
 - Dev stack: `infra\start_services.ps1`, then `python -m backend.workers.ingest|processor|notifier`, `uvicorn backend.api.main:app --port 8000`, `python -m simulator.run live --backfill-hours 48 --demo`, `python -m rover.server --mock --camera synthetic --port 8080`. `.env` ROVER_URL currently points to the laptop mock (change back to the Pi IP for hardware).
 - From Git Bash, call WSL scripts with `MSYS_NO_PATHCONV=1` or Git Bash rewrites `/mnt/d/...` paths.
 
+## ⚠️ Disk rule: everything on D:
+C: has only ~10 GB free. Code, venvs, datasets, model runs, caches → D: only. WSL disk is `D:\Ubuntu WSL\ext4.vhdx` (WSL /root is on D:). User env vars: `PIP_CACHE_DIR=D:\DevCache\pip`, `PLATFORMIO_CORE_DIR=D:\DevCache\platformio`, `PLAYWRIGHT_BROWSERS_PATH=D:\DevCache\ms-playwright`, npm cache `D:\DevCache\npm-cache`. Shells/tools started before these were set don't see them — pass them explicitly.
+
 ## Software phase notes (laptop)
 - Backend services live in WSL Ubuntu-24.04 (root user, systemd). Start: `powershell -ExecutionPolicy Bypass -File infra\start_services.ps1` (also starts a hidden `wsl --exec sleep infinity` keepalive — without it WSL stops the idle distro and the services die). Stop: `infra\stop_services.ps1`. Health check: `.venv/Scripts/python infra/check_services.py`.
 - One-time: `infra/wsl_install.sh` then `infra/setup.sh` (reads `.env`, idempotent). `.wslconfig` has `networkingMode=mirrored` so Windows `localhost` reaches WSL services; LAN devices (Pi/ESP32) will additionally need a Windows/Hyper-V firewall rule for 1883 (admin) — not done yet.

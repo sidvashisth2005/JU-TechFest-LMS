@@ -66,9 +66,7 @@ class Ingest:
         self.buf: list[tuple[str, dict]] = []
         self.lock = threading.Lock()
         # persistent session: the broker keeps queued messages while ingest is restarting
-        self.client = mqtt.Client(
-            mqtt.CallbackAPIVersion.VERSION2, client_id="lms-ingest", clean_session=False
-        )
+        self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="lms-ingest", clean_session=False)
         self.client.username_pw_set(settings.mqtt_user, settings.mqtt_password)
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message

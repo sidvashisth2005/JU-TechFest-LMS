@@ -34,3 +34,8 @@ simulator/out/
 Thumbs.db
 .vscode/
 .idea/
+
+# runtime logs from infra/run_all.ps1
+logs/
+# local firmware secrets
+firmware/**/include/lms_config.h

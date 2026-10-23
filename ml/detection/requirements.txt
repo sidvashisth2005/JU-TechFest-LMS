@@ -1,0 +1,7 @@
+# Cow detector training. Runs in WSL (Ubuntu 24.04, Python 3.12) with the NVIDIA GPU:
+#   python3 -m venv ~/lms-ml && ~/lms-ml/bin/pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+#   ~/lms-ml/bin/pip install -r ml/detection/requirements.txt
+ultralytics>=8.3
+fiftyone>=1.0
+onnx>=1.16
+onnxslim>=0.1

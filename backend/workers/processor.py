@@ -93,9 +93,7 @@ class Processor:
         # first deliver anything this consumer read before a crash but never acknowledged
         cursor = "0"
         while not self.stop:
-            resp = self.r.xreadgroup(
-                STREAM_GROUP, self.name, {STREAM_IN: cursor}, count=BATCH, block=BLOCK_MS
-            )
+            resp = self.r.xreadgroup(STREAM_GROUP, self.name, {STREAM_IN: cursor}, count=BATCH, block=BLOCK_MS)
             entries = resp[0][1] if resp else []
             if cursor == "0" and not entries:
                 cursor = ">"
@@ -154,8 +152,7 @@ class Processor:
             vitals = groups["vitals"]
             if vitals:
                 with cur.copy(
-                    "COPY vitals (ts, animal_id, hr, spo2, body_temp, activity, steps, battery, rssi) "
-                    "FROM STDIN"
+                    "COPY vitals (ts, animal_id, hr, spo2, body_temp, activity, steps, battery, rssi) FROM STDIN"
                 ) as cp:
                     for v in vitals:
                         cp.write_row(
@@ -185,10 +182,7 @@ class Processor:
                 cur.executemany(
                     "INSERT INTO env_readings (ts, station_id, temp, humidity, pressure, thi) "
                     "VALUES (%s, %s, %s, %s, %s, %s)",
-                    [
-                        (dt(e.ts), e.station_id, e.temp, e.humidity, e.pressure, thi(e.temp, e.humidity))
-                        for e in env
-                    ],
+                    [(dt(e.ts), e.station_id, e.temp, e.humidity, e.pressure, thi(e.temp, e.humidity)) for e in env],
                 )
                 last = {}
                 for e in env:

@@ -44,9 +44,7 @@ def require_user(request: Request, token: str | None = Query(None)) -> str:
 @router.post("/login")
 def login(body: Login) -> dict:
     if not settings.admin_password or not settings.jwt_secret:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE, "API_ADMIN_PASSWORD / API_JWT_SECRET not set"
-        )
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "API_ADMIN_PASSWORD / API_JWT_SECRET not set")
     ok_user = hmac.compare_digest(body.username, settings.admin_user)
     ok_pass = hmac.compare_digest(body.password, settings.admin_password)
     if not (ok_user and ok_pass):

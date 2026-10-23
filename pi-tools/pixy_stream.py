@@ -12,6 +12,7 @@ Endpoints:
 Needs the Pixy2 SWIG module built with the LMS additions
 (video_stop / video_resume / video_get_raw_frame / cam_set_u8 / cam_get).
 """
+
 import argparse
 import signal
 import sys

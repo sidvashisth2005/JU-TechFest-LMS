@@ -138,14 +138,10 @@ class Herd:
                     if any(e.active(start) for e in cow.events):
                         continue
                     dur = self.rng.uniform(dmin, dmax) * HOUR
-                    cow.events.append(
-                        Event(cow.animal_id, kind, start, start + dur, self.rng.uniform(0.7, 1.3))
-                    )
+                    cow.events.append(Event(cow.animal_id, kind, start, start + dur, self.rng.uniform(0.7, 1.3)))
         self._scheduled_until = max(self._scheduled_until, t1)
 
-    def force_event(
-        self, animal_id: str, kind: str, start: float, hours: float, severity: float = 1.0
-    ) -> Event:
+    def force_event(self, animal_id: str, kind: str, start: float, hours: float, severity: float = 1.0) -> Event:
         cow = self.cow(animal_id)
         e = Event(animal_id, kind, start, start + hours * HOUR, severity)
         cow.events.append(e)
