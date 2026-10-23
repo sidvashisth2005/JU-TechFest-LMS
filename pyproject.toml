@@ -1,0 +1,17 @@
+[project]
+name = "lms"
+version = "0.1.0"
+description = "Livestock Monitoring System: rover, collar sensors, data pipeline, ML and dashboard"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["legacy", "web", "ml/**/datasets", "ml/**/runs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

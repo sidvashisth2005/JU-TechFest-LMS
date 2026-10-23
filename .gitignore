@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.ipynb_checkpoints/
+
+# Node
+node_modules/
+dist/
+
+# Secrets / local config
+.env
+.env.*
+!.env.example
+
+# ML artifacts and data (large; regenerate or download)
+ml/**/datasets/
+ml/**/runs/
+*.pt
+*.onnx
+*_ncnn_model/
+ml/**/artifacts/*.joblib
+
+# Simulator / runtime output
+simulator/out/
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

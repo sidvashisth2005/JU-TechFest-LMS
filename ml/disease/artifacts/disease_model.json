@@ -1,0 +1,76 @@
+{
+  "model": "bernoulli_nb",
+  "training": "dropout_x5",
+  "cases": 448,
+  "symptoms": 93,
+  "diseases": 26,
+  "cv": "5-fold stratified x3 on distinct rows",
+  "results": {
+    "plain": {
+      "decision_tree": {
+        "full_top1": 0.839,
+        "full_top3": 0.854,
+        "partial_top1": 0.478,
+        "partial_top3": 0.514
+      },
+      "random_forest": {
+        "full_top1": 1.0,
+        "full_top3": 1.0,
+        "partial_top1": 0.847,
+        "partial_top3": 0.971
+      },
+      "knn": {
+        "full_top1": 0.993,
+        "full_top3": 1.0,
+        "partial_top1": 0.82,
+        "partial_top3": 0.946
+      },
+      "bernoulli_nb": {
+        "full_top1": 0.996,
+        "full_top3": 1.0,
+        "partial_top1": 0.801,
+        "partial_top3": 0.926
+      },
+      "logistic_regression": {
+        "full_top1": 1.0,
+        "full_top3": 1.0,
+        "partial_top1": 0.859,
+        "partial_top3": 0.971
+      }
+    },
+    "dropout_x5": {
+      "decision_tree": {
+        "full_top1": 0.984,
+        "full_top3": 0.986,
+        "partial_top1": 0.773,
+        "partial_top3": 0.811
+      },
+      "random_forest": {
+        "full_top1": 1.0,
+        "full_top3": 1.0,
+        "partial_top1": 0.852,
+        "partial_top3": 0.968
+      },
+      "knn": {
+        "full_top1": 0.995,
+        "full_top3": 0.999,
+        "partial_top1": 0.839,
+        "partial_top3": 0.949
+      },
+      "bernoulli_nb": {
+        "full_top1": 1.0,
+        "full_top3": 1.0,
+        "partial_top1": 0.865,
+        "partial_top3": 0.978
+      },
+      "logistic_regression": {
+        "full_top1": 1.0,
+        "full_top3": 1.0,
+        "partial_top1": 0.877,
+        "partial_top3": 0.976
+      }
+    }
+  },
+  "trained_at": "2026-10-10 00:14",
+  "note": "Synthetic hackathon dataset; suggestions only, not a veterinary diagnosis."
+}

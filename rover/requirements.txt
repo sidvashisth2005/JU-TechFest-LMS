@@ -1,0 +1,6 @@
+# Rover (Pi). OpenCV, numpy and picamera2 come from apt (python3-opencv, python3-picamera2);
+# brickpi3 from the DexterInd repo; the Pixy2 SWIG module is built on the Pi (see CLAUDE.md).
+fastapi>=0.110
+uvicorn>=0.29
+pydantic>=2.6
+paho-mqtt>=2.0

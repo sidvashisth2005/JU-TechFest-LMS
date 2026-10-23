@@ -1,0 +1,10 @@
+# Laptop-side services (backend, simulator, ML training). Rover/Pi deps live in rover/requirements.txt.
+pydantic>=2.8
+paho-mqtt>=2.1
+redis>=5
+psycopg[binary,pool]>=3.2
+python-dotenv>=1
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pyjwt>=2.9
+httpx>=0.27
