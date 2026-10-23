@@ -152,3 +152,14 @@ def test_silent_station_goes_offline_and_comes_back():
     assert out and out[0].kind == "sensor_offline" and out[0].station_id == "barn1"
     det.on_env(EnvMsg(station_id="barn1", ts=T0 + 21 * MIN, temp=25, humidity=40))
     assert ("barn1", "sensor_offline") not in det.open
+
+
+def test_station_alerts_restored_after_restart_still_clear():
+    """Processor restart: open alerts come back from the DB without the detector's memory."""
+    det = Detector()
+    det.open[("barn1", "station_bumped")] = T0
+    det.open[("barn1", "heat_stress")] = T0
+    det.tick(T0 + 31 * MIN)
+    assert ("barn1", "station_bumped") not in det.open
+    det.on_env(EnvMsg(station_id="barn1", ts=T0 + 32 * MIN, temp=20, humidity=50))  # THI ~66
+    assert ("barn1", "heat_stress") not in det.open

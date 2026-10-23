@@ -242,6 +242,8 @@ class Detector:
         if index is None:
             return []
         level = self.thi_level.get(e.station_id)
+        if level is None and (e.station_id, "heat_stress") in self.open:
+            level = "info"  # alert restored from the DB after a restart; lets it clear below thi_clear
         rank = {None: 0, "info": 1, "warning": 2, "critical": 3}
         if index >= cfg.thi_severe:
             target = "critical"
@@ -298,8 +300,9 @@ class Detector:
                 out += self._raise(
                     sid, "sensor_offline", "info", now, f"No data from barn station for {mins:.0f} min", station=True
                 )
-        for sid, t in self.last_knock.items():
-            if (sid, "station_bumped") in self.open and now - t > self.cfg.knock_clear:
+        for (sid, kind), raised in list(self.open.items()):
+            # after a restart the last knock is unknown: count from when the alert was raised
+            if kind == "station_bumped" and now - self.last_knock.get(sid, raised) > self.cfg.knock_clear:
                 out += self._clear(sid, "station_bumped", now, station=True)
         if self.scorer is not None and ref - self._model_at >= self.cfg.model_every:
             self._model_at = ref

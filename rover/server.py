@@ -53,13 +53,28 @@ class Rover:
         self.lock = threading.Lock()  # guards controller commands vs the loop
         self.left = self.right = 0.0
         self.battery: float | None = None
+        # latest detections from the vision thread (guarded by vlock)
+        self.vlock = threading.Lock()
         self.dets = []
+        self.frame_hw = (480, 640)
+        self.dets_seq = 0
+        self._raw = (0.0, 0.0)  # controller output before safety
+        self._raw_seq = -1
         self.jpeg: bytes | None = None
         self.frame_cond = threading.Condition()
         self.loop_fps = 0.0
+        self.vision_fps = 0.0
+        self._wake = threading.Event()  # a new command or new detections: run the control loop now
         self._running = True
+        # Motors and camera run apart: YOLO takes ~120 ms a frame on the Pi 4, and a dashboard
+        # command must not wait for it. The control loop runs at loop_hz and wakes on commands.
         self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._vision = threading.Thread(target=self._vision_loop, daemon=True)
         self._thread.start()
+        self._vision.start()
+
+    def wake(self) -> None:
+        self._wake.set()
 
     # ---------- loop ----------
     def _loop(self) -> None:
@@ -83,20 +98,22 @@ class Rover:
             if t - t_fps >= 2:
                 self.loop_fps = count / (t - t_fps)
                 count, t_fps = 0, t
-            time.sleep(max(0.0, period - (time.time() - t)))
+            self._wake.wait(max(0.0, period - (time.time() - t)))
+            self._wake.clear()
 
     def _tick(self, now: float, last_battery_due: bool) -> None:
-        frame = self.camera.read()
         if last_battery_due:
             self.battery = self.hw.battery_v()
         self.safety.update(self.hw.distance_cm(), now)
-        dets = []
-        h, w = (frame.shape[:2]) if frame is not None else (480, 640)
-        if frame is not None:
-            dets = self.tracker.update(self.detector.detect(frame))
-        self.safety.update_people(dets, h)
+        with self.vlock:
+            dets, (h, w), seq = self.dets, self.frame_hw, self.dets_seq
         with self.lock:
-            left, right = self.controller.step(dets, w, h, now)
+            # follow mode steers once per camera frame (the PD gains assume that); manual and
+            # idle are evaluated every tick so commands and the watchdog act at once
+            if self.controller.mode != "follow" or seq != self._raw_seq:
+                self._raw = self.controller.step(dets, w, h, now)
+                self._raw_seq = seq
+            left, right = self._raw
         left, right = self.safety.filter(left, right, now, self.battery)
         cap = self.cfg.max_dps
         left, right = max(-cap, min(cap, left)), max(-cap, min(cap, right))
@@ -104,23 +121,50 @@ class Rover:
             self.hw.stop()
         else:
             self.hw.drive(left, right)
-        self.left, self.right, self.dets = left, right, dets
+        self.left, self.right = left, right
+
+    def _vision_loop(self) -> None:
+        count, t_fps = 0, time.time()
+        while self._running:
+            try:
+                self._vision_step()
+            except Exception:
+                log.exception("vision loop error")
+                time.sleep(0.5)
+            count += 1
+            t = time.time()
+            if t - t_fps >= 2:
+                self.vision_fps = count / (t - t_fps)
+                count, t_fps = 0, t
+
+    def _vision_step(self) -> None:
+        frame = self.camera.read()
+        if frame is None:
+            time.sleep(0.05)
+            return
+        h, w = frame.shape[:2]
+        dets = self.tracker.update(self.detector.detect(frame))
+        self.safety.update_people(dets, h)
+        with self.vlock:
+            self.dets, self.frame_hw = dets, (h, w)
+            self.dets_seq += 1
+        if self.controller.mode == "follow":
+            self._wake.set()  # steer on the new detections right away
         if dets and self.mqtt is not None:
-            self._publish_detections(now, w, h, dets)
-        if frame is not None:
-            lines = [
-                f"{self.controller.mode.upper()}  {self.controller.state}",
-                f"L {left:+.0f}  R {right:+.0f} dps   dist "
-                + ("--" if self.safety.distance is None else f"{self.safety.distance:.0f} cm"),
-            ]
-            if self.safety.reason:
-                lines.append(f"STOP: {self.safety.reason}")
-            out = annotate(frame, dets, self.controller.target, lines)
-            ok, jpg = cv2.imencode(".jpg", out, [cv2.IMWRITE_JPEG_QUALITY, 80])
-            if ok:
-                with self.frame_cond:
-                    self.jpeg = jpg.tobytes()
-                    self.frame_cond.notify_all()
+            self._publish_detections(time.time(), w, h, dets)
+        lines = [
+            f"{self.controller.mode.upper()}  {self.controller.state}",
+            f"L {self.left:+.0f}  R {self.right:+.0f} dps   dist "
+            + ("--" if self.safety.distance is None else f"{self.safety.distance:.0f} cm"),
+        ]
+        if self.safety.reason:
+            lines.append(f"STOP: {self.safety.reason}")
+        out = annotate(frame, dets, self.controller.target, lines)
+        ok, jpg = cv2.imencode(".jpg", out, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        if ok:
+            with self.frame_cond:
+                self.jpeg = jpg.tobytes()
+                self.frame_cond.notify_all()
 
     # ---------- MQTT ----------
     def status(self) -> dict:
@@ -141,6 +185,7 @@ class Rover:
             "targets": sum(1 for d in self.dets if d.label != "person"),
             "fps": round(self.camera.fps, 1),
             "loop_hz": round(self.loop_fps, 1),
+            "vision_fps": round(self.vision_fps, 1),
             "mock": self.mock,
         }
 
@@ -170,7 +215,9 @@ class Rover:
 
     def close(self) -> None:
         self._running = False
+        self._wake.set()
         self._thread.join(timeout=2)
+        self._vision.join(timeout=2)
         self.hw.close()
         self.camera.close()
 
@@ -219,6 +266,7 @@ def make_app(rover: Rover, token: str | None = None) -> FastAPI:
             raise HTTPException(400, f"direction must be one of {DIRECTIONS}")
         with rover.lock:
             rover.controller.manual(body.direction, body.speed)
+        rover.wake()  # apply now instead of at the next tick
         return {"ok": True, "mode": rover.controller.mode}
 
     @app.post("/mode")
@@ -228,6 +276,7 @@ def make_app(rover: Rover, token: str | None = None) -> FastAPI:
                 rover.controller.set_mode(body.mode)
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
+        rover.wake()
         return {"ok": True, "mode": rover.controller.mode}
 
     @app.get("/snapshot.jpg")

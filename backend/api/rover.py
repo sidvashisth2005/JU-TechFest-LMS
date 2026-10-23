@@ -22,10 +22,21 @@ def _url(path: str) -> str:
     return settings.rover_url.rstrip("/") + path
 
 
+_client: httpx.AsyncClient | None = None
+
+
+def _shared_client() -> httpx.AsyncClient:
+    """One client for all commands keeps the connection to the Pi open. A new client per
+    request cost ~250 ms (SSL context + TCP setup), which made driving feel laggy."""
+    global _client
+    if _client is None:
+        _client = httpx.AsyncClient(timeout=TIMEOUT, limits=httpx.Limits(keepalive_expiry=30))
+    return _client
+
+
 async def _forward(method: str, path: str, json=None):
     try:
-        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-            r = await client.request(method, _url(path), json=json, headers=_headers())
+        r = await _shared_client().request(method, _url(path), json=json, headers=_headers())
     except httpx.HTTPError as e:
         raise HTTPException(503, f"rover unreachable: {type(e).__name__}") from e
     if r.status_code == 401:

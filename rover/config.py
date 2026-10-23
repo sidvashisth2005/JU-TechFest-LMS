@@ -39,5 +39,5 @@ class RoverConfig:
     person_stop_frac: float = 0.35
     person_min_conf: float = 0.4
 
-    loop_hz: float = 15
+    loop_hz: float = 20  # motor/safety loop; the camera + detector run in their own thread
     status_publish_s: float = 1.0

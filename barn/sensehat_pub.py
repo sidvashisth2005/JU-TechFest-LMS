@@ -11,7 +11,8 @@ and ack (joystick). The backend sends back the station's open-alert count on
 lms/barn/{station}/state, shown on the LED.
 
 LED + joystick (barn/station.py Menu):
-  home screen   BARN_LETTER (e.g. S) on the THI colour; "!" on the alert colour while alerts are open
+  home screen   BARN_LETTER (e.g. S) on the THI colour; corner dot while alerts are open
+                (blinking = warning/critical, steady = info)
   left / right  temp, humidity, THI, dew point, pressure (+3 h trend), alerts, spirit level,
                 compass, IP address
   click         send a reading now           hold 2 s   acknowledge this station's alerts
@@ -308,17 +309,24 @@ class Station:
     def render(self, now: float) -> None:
         screen, s = self.menu.screen, self.sense
         if screen == "home":
-            if self.state.open_alerts:
-                bg = SEVERITY_COLOURS.get(self.state.worst or "warning", (230, 110, 0))
-                self.show(("alert", bg), lambda: s.show_letter("!", text_colour=(255, 255, 255), back_colour=bg))
-                return
+            # letter on the THI colour + a corner dot while alerts are open: blinking for a
+            # warning/critical alert (act now), steady for info (minor, e.g. mild heat)
             bg = band_colour(self.latest.thi if self.latest else None)
-            if self.letter:
-                self.show(
-                    ("letter", bg), lambda: s.show_letter(self.letter, text_colour=letter_colour(bg), back_colour=bg)
-                )
-            else:
-                self.show(("fill", bg), lambda: s.clear(bg))
+            dot = None
+            if self.state.open_alerts:
+                worst = self.state.worst or "warning"
+                if worst == "info" or int(now * 2) % 2 == 0:
+                    dot = SEVERITY_COLOURS.get(worst, (230, 110, 0))
+
+            def draw():
+                if self.letter:
+                    s.show_letter(self.letter, text_colour=letter_colour(bg), back_colour=bg)
+                else:
+                    s.clear(bg)
+                if dot:
+                    s.set_pixel(7, 0, dot)
+
+            self.show(("home", bg, dot), draw)
             return
         icon, colour = ICONS[screen]
         live = screen in ("level", "compass")  # graphics: name once, then the live picture
