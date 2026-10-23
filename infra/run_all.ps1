@@ -32,6 +32,8 @@ Start-Part "notifier" @("-m", "backend.workers.notifier")
 Start-Part "api" @("-m", "uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000")
 # hears the Pis' IP beacons and keeps .env / their MQTT_HOST pointed at the right addresses
 Start-Part "piwatch" @("infra\pi_watch.py", "--update")
+# Telegram message with the dashboard link whenever this laptop's Wi-Fi address changes
+Start-Part "dashlink" @("-m", "backend.workers.dashlink")
 if ($Simulator) {
     Start-Part "simulator" @("-m", "simulator.run", "live", "--backfill-hours", "48", "--backfill-interval", "120",
         "--backfill-pause", "0", "--demo", "--interval", "15")
