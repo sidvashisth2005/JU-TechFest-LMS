@@ -68,7 +68,7 @@ Training data: 3,638 images (1,968 COCO cow, 470 Open Images cattle, 1,200 negat
 
 Reproduce (in WSL): `bash ml/detection/run_pipeline.sh`, or step by step `python -m ml.detection.prepare_data`, `python -m ml.detection.train`, `python -m ml.detection.export --weights ~/lms-runs/cow-yolo11n/weights/best.pt`. Results are written to `~/lms-runs/cow-yolo11n/report.json`.
 
-## 4. Person detection (prepared, not trained yet)
+## 4. Person detection (cow + person model)
 
 The rover must recognise people: to stop when one is close (the ultrasonic only looks straight ahead) and never to follow one. The plan is a single two-class model, **cow + person**, so the Pi 4 runs one detector pass per frame instead of two.
 
@@ -80,7 +80,19 @@ The rover must recognise people: to stop when one is close (the ultrasonic only 
 
 **Rover side (done):** `rover/safety.py` blocks forward motion when a confident person box is taller than 35 % of the frame (backing away and turning stay allowed); `rover/controller.py` never picks a person as the follow target. Works with any model that outputs a `person` class.
 
-**To train later** (in WSL, gentle settings with the thermal guard):
+**Result (trained 2026-10-10, 80 epochs, 2.4 h, GPU peak 72 °C, no thermal pauses).** Same 463 COCO validation images for both models:
+
+| | Stock YOLO11n (COCO) | Fine-tuned cow+person |
+|---|---|---|
+| Person mAP50 / recall | **0.676 / 0.589** | 0.633 / 0.525 |
+| Cow mAP50 / recall | 0.714 / 0.609 | **0.724 / 0.636** |
+| Overall mAP50 | **0.695** | 0.678 |
+
+The fine-tuned model got slightly better at cows but **worse at people**. The stock model learned people from ~64,000 COCO images; fine-tuning on ~3,000 made it partly forget them (catastrophic forgetting). Because person recall is the safety-critical number, the rover keeps the **stock COCO YOLO11n** for people (it also detects cows almost as well), or the cow-only fine-tuned model when following cows matters most. The fine-tuned cow+person model is not deployed; its report is `ml/detection/models/cow_person_report.json`.
+
+Next attempt, if needed: freeze the backbone (`freeze=10`), lower the learning rate, and mix in many more COCO person images so the model doesn't forget.
+
+**Reproduce** (in WSL, gentle settings with the thermal guard):
 ```
 bash ml/detection/run_cow_person_pipeline.sh data    # already run: dataset + pseudo-labels
 bash ml/detection/run_cow_person_pipeline.sh train   # 80 epochs, then export to ml/detection/models/cow_person.*
